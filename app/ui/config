@@ -1,0 +1,14 @@
+{
+    ".url": {
+        "gzhuploader.main": {
+            "title": "公众号助手",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "",
+            "gatewayPrefix": "/app/gzhuploader",
+            "gatewaySocket": "app.sock",
+            "url": "/app/gzhuploader",
+            "allUsers": true
+        }
+    }
+}
