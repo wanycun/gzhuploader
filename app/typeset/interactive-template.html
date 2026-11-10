@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} · 公众号排版预览</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#eef0f2;color:#1f2937;}
+  .app{display:flex;height:100vh;overflow:hidden;}
+  .stage{flex:1;overflow:auto;padding:28px 24px 60px;}
+  .phone-hint{text-align:center;font-size:12px;color:#9ca3af;margin-bottom:14px;}
+  #gzh-content{max-width:677px;margin:0 auto;box-shadow:0 2px 16px rgba(0,0,0,.06);border-radius:4px;}
+  .panel{width:320px;flex-shrink:0;background:#fff;border-left:1px solid #e5e7eb;overflow:auto;padding:18px 20px 32px;}
+  .panel h3{font-size:14px;margin:0 0 12px;}
+  .panel .sec{margin-bottom:22px;}
+  .panel .sec-title{font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{padding:5px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;cursor:pointer;background:#fff;color:#374151;transition:all .12s;user-select:none;}
+  .chip:hover{border-color:#9ca3af;}
+  .chip.on{background:#111827;color:#fff;border-color:#111827;}
+  .row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .row label{width:76px;flex-shrink:0;font-size:12px;color:#4b5563;}
+  .row input[type=range]{flex:1;accent-color:#111827;}
+  .row .val{width:40px;text-align:center;font-size:12px;color:#111827;font-weight:600;background:#f3f4f6;border-radius:6px;padding:3px 0;}
+  .swatches{display:flex;align-items:center;gap:10px;}
+  .sw{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1);}
+  .sw.on{border-color:#111827;}
+  .sw input{display:none;}
+  .sw-custom{display:flex;align-items:center;justify-content:center;font-size:12px;color:#6b7280;border:1px dashed #d1d5db;background:#fff;}
+  select.gfont{flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;background:#fff;color:#374151;}
+  .btnbar{display:flex;gap:8px;margin-bottom:18px;}
+  .btn{flex:1;padding:9px 0;border:0;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;}
+  .btn-copy{background:#059669;color:#fff;box-shadow:0 2px 8px rgba(5,150,105,.3);}
+  .btn-copy:hover{background:#047857;}
+  .btn-reset{background:#f3f4f6;color:#374151;font-weight:600;}
+  .btn-reset:hover{background:#e5e7eb;}
+  .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s;z-index:99;box-shadow:0 6px 20px rgba(0,0,0,.25);}
+  .toast.show{opacity:1;}
+  .tip{font-size:11px;color:#9ca3af;line-height:1.7;background:#f9fafb;border-radius:8px;padding:10px 12px;}
+  .hint{font-size:11px;color:#9ca3af;line-height:1.5;margin:-4px 0 12px 86px;}
+  .hint-below{font-size:11px;color:#9ca3af;line-height:1.5;margin:8px 0 0;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <div class="phone-hint">左侧为公众号正文渲染效果 · 调整右侧样式会实时更新，复制后样式随当前预览一起带走</div>
+    <div id="gzh-content"></div>
+  </div>
+  <div class="panel">
+    <div class="btnbar">
+      <button class="btn btn-copy" id="copyBtn" onclick="gzhCopy()">📋 复制到公众号</button>
+      <button class="btn btn-reset" onclick="resetStyle()">重置</button>
+    </div>
+    <div class="sec">
+      <div class="sec-title">主题（三套原创）</div>
+      <div class="chips" id="presetChips"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">自定义样式</div>
+      <div class="row"><label>正文字号</label><input type="range" id="ctlFs" min="13" max="18" step="1"><span class="val" id="valFs"></span></div>
+      <div class="row"><label>段间距</label><input type="range" id="ctlGap" min="12" max="36" step="2"><span class="val" id="valGap"></span></div>
+      <div class="row"><label>圆角大小</label><input type="range" id="ctlRadius" min="0" max="14" step="1"><span class="val" id="valRadius"></span></div>
+      <div class="hint">圆角作用于：引用块、表格、图片、高亮标记、行内代码</div>
+      <div class="row"><label>正文字体</label><select class="gfont" id="ctlFont"></select></div>
+      <div class="hint" id="fontHint"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">段落标题样式</div>
+      <div class="chips" id="hstyleChips"></div>
+      <div class="hint-below">作用于各章节的编号标题（01/02…），编号样式随所选样式联动；标题字体随主题（靛蓝档案/暖砂杂志为衬线）</div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">内容背景色</div>
+      <div class="swatches" id="bgSwatches"></div>
+    </div>
+    <div class="tip">
+      调好样式后点「复制到公众号」，再到公众号编辑器 Ctrl/⌘+V 粘贴，颜色、字号等改动会一起粘贴进去。
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+// ===== 数据 =====
+// 三套主题预设：色值/字号/圆角与 references/theme-index.md 权威值表一致；
+// titleFont = 标题字体（主题 DNA，靛蓝档案/暖砂杂志为衬线；正文字体选择器只改正文）。
+// 必须与 scripts/render_engine.py 的 THEMES 保持镜像。
+var PRESETS = [
+  {id:"electric", name:"电光蓝图", titleFont:"-apple-system,system-ui,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif", fs:15, gap:24, radius:3,
+   c:{accent:"#0B63CE",light:"#E4EEFB",bg:"#F5F8FC",heading:"#0E1726",text:"#3D4A5C",sub:"#6E7C90",line:"#D5E1F0"}},
+  {id:"indigo", name:"靛蓝档案", titleFont:"Georgia,'Songti SC','Noto Serif CJK SC','Source Han Serif SC',serif", fs:15, gap:24, radius:4,
+   c:{accent:"#2B3A67",light:"#E6EAF5",bg:"#F4F6FB",heading:"#18203F",text:"#464C66",sub:"#6B7290",line:"#C8D0E4"}},
+  {id:"sand", name:"暖砂杂志", titleFont:"Georgia,'Songti SC','Noto Serif CJK SC','Source Han Serif SC',serif", fs:16, gap:26, radius:10,
+   c:{accent:"#A85C27",light:"#F5E9D8",bg:"#FDF8F1",heading:"#3B2E24",text:"#5C4C3C",sub:"#7D6B58",line:"#E3D5C3"}}
+];
+// 中文正文可选字体：与 scripts/render_engine.py 的 FONT_OPTIONS 顺序一一对应
+// m = 移动端支持度备注（发布后能否在读者手机上生效，取决于读者设备是否有该字体；
+// 公众号禁 @font-face 无法内嵌字体，iOS 内置字体多、安卓只有黑体系稳定）
+var FONTS = [
+  {name:"系统默认", m:"双端稳定（跟随系统）", v:"-apple-system,system-ui,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif"},
+  {name:"现代黑体", m:"双端稳定（已适配主流安卓 ROM）", v:"'PingFang SC','MiSans','HarmonyOS Sans SC','HONOR Sans','OPPO Sans','Microsoft YaHei',sans-serif"},
+  {name:"书卷宋体（小说常用）", m:"iOS 稳定；安卓部分机型降级为默认", v:"'Songti SC','Noto Serif SC','Source Han Serif SC','SimSun',serif"},
+  {name:"手记楷体（霞鹜文楷）", m:"iOS 稳定；安卓多降级为默认", v:"'LXGW WenKai','Kaiti SC','STKaiti','KaiTi',serif"},
+  {name:"清雅仿宋", m:"仅桌面；手机降级为默认", v:"'FangSong','STFangsong','FangSong_GB2312',serif"},
+  {name:"圆润幼圆", m:"仅桌面；手机降级为默认", v:"'Yuanti SC','Yuanti TC','YouYuan',sans-serif"},
+  {name:"等线硬朗", m:"仅桌面；手机降级为默认", v:"'DengXian','Segoe UI','Source Han Sans SC',sans-serif"},
+  {name:"冬青雅黑", m:"iOS 稳定；安卓降级为系统黑体", v:"'Hiragino Sans GB','Heiti SC','PingFang SC',sans-serif"}
+];
+// 段落标题内置样式：与 scripts/render_engine.py 的 HEADING_STYLES 顺序一一对应
+var HEADING_STYLES = ["编号·竖线（默认）", "色块·编号", "居中·短杠", "浅底·左条", "底线·编号",
+  "圆环·编号", "深底·白字", "粗左条", "居中·圆点", "框线·编号"];
+var BG_EXTRA = ["#ffffff","#fdfaf3","#f6f7f5"];
+var SPEC = {{SPEC_JSON}};
+// 初始 preset：spec.theme（references 主题 id）→ 面板索引；fs/gap/radius 取该主题预设值
+// （用户拖过滑杆后不再被主题覆盖，见 presetChips 的 touched 逻辑）
+var THEME_TO_PRESET = {"electric-blueprint":0, "indigo-archive":1, "sand-magazine":2};
+var initPreset = THEME_TO_PRESET[SPEC.theme];
+if(initPreset === undefined) initPreset = 0;
+var state = {preset:initPreset, fs:PRESETS[initPreset].fs, gap:PRESETS[initPreset].gap,
+             radius:PRESETS[initPreset].radius, font:0, hstyle:0, bgCustom:null, touched:false};
+var contentEl = document.getElementById('gzh-content');
+
+// 提亮函数：把 hex 颜色向白色混合 amt（0~1）。用于自定义背景色时生成「同色系提亮」的引用块内衬/表头，
+// 让它既跟随背景色、又保留可辨别的卡片边界（若直接用同色会看不出边界）。
+function lighten(hex, amt){
+  hex = String(hex||'').replace('#','');
+  if(hex.length !== 6) return hex;
+  var r=parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
+  r=Math.round(r+(255-r)*amt); g=Math.round(g+(255-g)*amt); b=Math.round(b+(255-b)*amt);
+  var h=function(n){ return ('0'+n.toString(16)).slice(-2); };
+  return '#'+h(r)+h(g)+h(b);
+}
+
+function S(){
+  var c = Object.assign({}, PRESETS[state.preset].c);
+  c.titleFont = PRESETS[state.preset].titleFont;
+  if(state.bgCustom){
+    c.bg = state.bgCustom;
+    // 引用块内衬/表头用「同色系提亮」而非完全同色，保证既有边界又不突兀
+    c.light = lighten(state.bgCustom, 0.18);
+  }
+  c.fs = state.fs; c.gap = state.gap; c.radius = state.radius;
+  c.font = FONTS[state.font].v;
+  return c;
+}
+
+// ===== 组件模板（与 render_engine.py 保持镜像） =====
+function pad2(n){ return (n<10?"0":"")+n; }
+
+// Python 预转换的行内 HTML 里带默认配色（电光蓝图），切主题时替换成当前主题色
+var DEFAULT_HEX = {heading:'#0E1726', light:'#E4EEFB', text:'#3D4A5C', sub:'#6E7C90', accent:'#0B63CE', line:'#D5E1F0'};
+function themeHTML(h, s){
+  Object.keys(DEFAULT_HEX).forEach(function(k){
+    h = h.split(DEFAULT_HEX[k]).join(s[k]);
+  });
+  // §R§ 是 Python 侧预置的圆角占位符（高亮框 / 行内代码框），跟随圆角滑杆
+  return h.split('§R§').join(s.radius);
+}
+
+function spacer(s){
+  // 彩色隔距层：决定块与块之间的间距。公众号会剥掉块的 padding（background-color 保留、内距归零），
+  // 单靠彩色 padding-top 撑距时块间会露白；改为插入与块同深度、带 background-color 的 section，
+  // 用 line-height 撑出高度——间隙本身是彩色节点，深度够即穿透清洗。
+  return '<section style="margin:0;background-color:'+s.bg+';line-height:'+s.gap+'px;font-size:12px;"><span leaf="">&nbsp;</span></section>';
+}
+
+function blockWrap(inner, s, first, bottom){
+  // 底色下沉到每个块自身（微信会剥最外层节点的 padding，只保留 background-color）。
+  // 块间距由 spacer() 彩色隔距层提供（首块/页首除外）；块带横向16px内距+可选底部16px收边。
+  // margin:0 归零公众号平铺默认 margin（不承担任何间距）。
+  var pre = first ? '' : spacer(s);
+  return pre + '<section style="margin:0;padding:0 16px '+(bottom?16:0)+'px;background-color:'+s.bg+';">'+inner+'</section>';
+}
+
+function headerHTML(s){
+  var bar = '<section style="display:flex;align-items:center;gap:8px;padding-bottom:20px;">'
+    + '<span style="width:8px;height:8px;background:'+s.accent+';border-radius:50%;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;"><span leaf="">&nbsp;</span></span>'
+    + '<span style="font-size:11px;font-weight:700;letter-spacing:3px;color:'+s.sub+';"><span leaf="">'+SPEC.label+'</span></span>'
+    + '<span style="flex:1;height:1px;background:'+s.line+';display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;"><span leaf="">&nbsp;</span></span>'
+    + '<span style="font-size:11px;color:'+s.sub+';font-weight:500;"><span leaf="">'+SPEC.date+'</span></span></section>';
+  var title = '<p style="font-size:23px;font-weight:800;color:'+s.heading+';margin:0;padding:0 0 12px;line-height:1.35;font-family:'+s.titleFont+';">'+titleHTML(SPEC.title,s)+'</p>';
+  var summary = SPEC.summary ? '<p style="font-size:14px;color:'+s.sub+';margin:0;padding:0 0 16px;line-height:1.8;">'+SPEC.summary+'</p>' : '';
+  var dash = '<section style="width:42px;height:3px;background:'+s.accent+';border-radius:2px;"><span leaf="">&nbsp;</span></section>';
+  var inner = '<section style="padding:6px 0 2px;">'+bar+title+summary+dash+'</section>'
+    + '<section style="border-bottom:1px solid '+s.line+';padding-top:18px;"><span leaf="">&nbsp;</span></section>';
+  return blockWrap(inner, s, true);
+}
+
+function titleHTML(t, s){
+  // **强调词** → 主色下划线（与 render_engine.title_html 镜像）
+  var parts = t.split(/\*\*(.+?)\*\*/);
+  var out = '';
+  for(var i=0;i<parts.length;i++){
+    if(!parts[i]) continue;
+    if(i%2===1){
+      out += '<span style="border-bottom:3px solid '+s.accent+';"><span leaf="">'+parts[i]+'</span></span>';
+    }else{
+      out += '<span leaf="">'+parts[i]+'</span>';
+    }
+  }
+  return out;
+}
+
+function miniDash(s){
+  // 标题装饰短杠（居中式标题两侧用）
+  return '<span style="width:18px;height:2px;background:'+s.accent+';display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;"><span leaf="">&nbsp;</span></span>';
+}
+
+function headingHTML(i, h, s){
+  // 与 render_engine.b_heading 镜像：按 state.hstyle 分派 10 套内置样式
+  var num = pad2(i+1), inner;
+  if(state.hstyle===1){
+    // 色块·编号：主色方块白字编号 + 标题
+    inner = '<section style="display:flex;align-items:center;gap:10px;">'
+      + '<span style="width:32px;height:32px;background:'+s.accent+';border-radius:'+s.radius+'px;display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:14px;font-weight:800;letter-spacing:1px;flex-shrink:0;line-height:1;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:17px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span></section>';
+  }else if(state.hstyle===2){
+    // 居中·短杠：两侧主色短杠 + 编号 + 标题，整体居中
+    inner = '<section style="display:flex;align-items:center;justify-content:center;gap:10px;">'
+      + miniDash(s)
+      + '<span style="font-size:12px;font-weight:700;color:'+s.accent+';letter-spacing:1px;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:16px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span>'
+      + miniDash(s) + '</section>';
+  }else if(state.hstyle===3){
+    // 浅底·左条：浅底圆角标题条 + 主色左竖条
+    inner = '<section style="background:'+s.light+';border-left:4px solid '+s.accent+';border-radius:'+s.radius+'px;padding:10px 14px;">'
+      + '<section style="display:flex;align-items:center;gap:10px;">'
+      + '<span style="font-size:14px;font-weight:800;color:'+s.accent+';line-height:1;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:16px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span>'
+      + '</section></section>';
+  }else if(state.hstyle===4){
+    // 底线·编号：编号 + 标题，底部通栏主色细线
+    inner = '<section style="display:flex;align-items:baseline;gap:10px;border-bottom:2px solid '+s.accent+';padding-bottom:8px;">'
+      + '<span style="font-size:18px;font-weight:800;color:'+s.accent+';line-height:1;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:16px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span></section>';
+  }else if(state.hstyle===5){
+    // 圆环·编号：描边圆圈内嵌编号 + 标题
+    inner = '<section style="display:flex;align-items:center;gap:10px;">'
+      + '<span style="width:30px;height:30px;border:2px solid '+s.accent+';border-radius:50%;display:flex;align-items:center;justify-content:center;color:'+s.accent+';font-size:13px;font-weight:800;flex-shrink:0;line-height:1;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:17px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span></section>';
+  }else if(state.hstyle===6){
+    // 深底·白字：标题色通栏圆角条 + 白字标题 + 主色编号（强调词深色一并翻白）
+    var hWhite = h.split('color:'+s.heading+';').join('color:#ffffff;').split('color:'+s.heading).join('color:#ffffff');
+    inner = '<section style="background:'+s.heading+';border-radius:'+s.radius+'px;padding:9px 14px;display:flex;align-items:center;gap:10px;">'
+      + '<span style="font-size:13px;font-weight:800;color:'+s.accent+';line-height:1;letter-spacing:1px;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:15px;font-weight:700;color:#ffffff;">'+hWhite+'</span></section>';
+  }else if(state.hstyle===7){
+    // 粗左条：主色粗竖条 + 编号 + 标题
+    inner = '<section style="border-left:5px solid '+s.accent+';padding-left:12px;display:flex;align-items:baseline;gap:10px;">'
+      + '<span style="font-size:18px;font-weight:800;color:'+s.accent+';line-height:1;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:16px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span></section>';
+  }else if(state.hstyle===8){
+    // 居中·圆点：两侧主色圆点 + 居中标题
+    var dot = '<span style="width:6px;height:6px;background:'+s.accent+';border-radius:50%;display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;"><span leaf="">&nbsp;</span></span>';
+    inner = '<section style="display:flex;align-items:center;justify-content:center;gap:10px;">'
+      + dot
+      + '<span style="font-size:12px;font-weight:700;color:'+s.accent+';letter-spacing:1px;"><span leaf="">'+num+'</span></span>'
+      + '<span style="font-size:16px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span>'
+      + dot + '</section>';
+  }else if(state.hstyle===9){
+    // 框线·编号：细边框圆角框 + 编号 + 小竖线 + 标题
+    inner = '<section style="border:1px solid '+s.line+';border-radius:'+s.radius+'px;padding:8px 14px;display:flex;align-items:center;gap:10px;">'
+      + '<span style="font-size:16px;font-weight:800;color:'+s.accent+';line-height:1;"><span leaf="">'+num+'</span></span>'
+      + '<span style="width:1px;height:14px;background:'+s.line+';display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;"><span leaf="">&nbsp;</span></span>'
+      + '<span style="font-size:16px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span></section>';
+  }else{
+    // 编号·竖线（默认，刊头条基因）
+    inner = '<section style="display:flex;align-items:center;gap:12px;">'
+      + '<span style="font-size:20px;font-weight:800;color:'+s.accent+';line-height:1;letter-spacing:1px;"><span leaf="">'+num+'</span></span>'
+      + '<span style="width:1px;height:18px;background:'+s.line+';display:inline-block;overflow:hidden;vertical-align:middle;font-size:0;line-height:0;"><span leaf="">&nbsp;</span></span>'
+      + '<span style="font-size:17px;font-weight:700;color:'+s.heading+';"><span leaf="">'+h+'</span></span></section>';
+  }
+  // 标题字体随主题（靛蓝档案/暖砂杂志为衬线）——与 render_engine.b_heading 的 wrapped 镜像
+  return blockWrap('<section style="font-family:'+s.titleFont+';">'+inner+'</section>', s, false);
+}
+
+function paraHTML(h, s){
+  var inner = '<p style="margin:0;font-size:'+s.fs+'px;line-height:1.9;text-align:justify;color:'+s.text+';">'+h+'</p>';
+  return blockWrap(inner, s, false);
+}
+
+function quoteHTML(b, s){
+  var src = b.from ? '<p style="margin:0;padding:8px 0 0;font-size:12px;color:'+s.sub+';text-align:right;"><span leaf="">—— '+b.from+'</span></p>' : '';
+  var inner = '<section style="background:'+s.light+';border-left:3px solid '+s.accent+';border-radius:'+s.radius+'px;padding:14px 16px;">'
+    + '<p style="margin:0;font-size:'+s.fs+'px;line-height:1.85;color:'+s.text+';">'+b.h+'</p>'+src+'</section>';
+  return blockWrap(inner, s, false);
+}
+
+function tableHTML(b, s){
+  var n = Math.max(b.head.length, 2);
+  b.rows.forEach(function(r){ if(r.length>n) n=r.length; });
+  var w0 = n<=3 ? 28 : 22;
+  var wr = (100-w0)/(n-1);
+  function cell(v, i, bold, isHead){
+    var st = 'width:'+wr+'%;padding:9px 10px;box-sizing:border-box;font-size:'+(s.fs-1)+'px;';
+    if(i>0){ st += 'border-left:1px solid '+s.line+';'; }
+    if(isHead){ st += 'font-weight:700;color:'+s.heading+';'; }
+    else if(bold){ st += 'font-weight:600;color:'+s.heading+';'; }
+    else { st += 'color:'+s.text+';'; }
+    // 所有单元格文字都包 <span leaf="">（与 render_engine.b_table 的 inline() 镜像）
+    return '<section style="'+st+'"><span leaf="">'+v+'</span></section>';
+  }
+  var html = '<section style="border:1px solid '+s.line+';border-radius:'+s.radius+'px;overflow:hidden;background:'+s.bg+';">';
+  html += '<section style="display:flex;background:'+s.light+';">'
+    + '<section style="width:'+w0+'%;padding:9px 10px;box-sizing:border-box;font-size:'+(s.fs-1)+'px;font-weight:700;color:'+s.heading+';"><span leaf="">'+(b.head[0]||"")+'</span></section>';
+  for(var j=1;j<n;j++){ html += cell(b.head[j]||"", j, false, true); }
+  html += '</section>';
+  b.rows.forEach(function(row, i){
+    var last = i === b.rows.length-1;
+    html += '<section style="display:flex;'+(last?"":"border-bottom:1px solid "+s.line+";")+'">';
+    html += '<section style="width:'+w0+'%;padding:9px 10px;box-sizing:border-box;font-size:'+(s.fs-1)+'px;font-weight:600;color:'+s.heading+';"><span leaf="">'+(row[0]||"")+'</span></section>';
+    for(var j=1;j<n;j++){ html += cell(row[j]||"", j, false, false); }
+    html += '</section>';
+  });
+  html += '</section>';
+  return blockWrap(html, s, false);
+}
+
+function listHTML(b, s){
+  // 假列表：公众号会清洗 <ul>/<li>（列表块边上露白），改用 <p> + 「·」前缀，p+span 渲染最稳。
+  var ps = b.items.map(function(it){
+    return '<p style="margin:0;padding:0 0 6px;font-size:'+s.fs+'px;line-height:1.8;color:'+s.text+';"><span leaf="">·&nbsp;'+it+'</span></p>';
+  }).join('');
+  return blockWrap(ps, s, false);
+}
+
+function imgHTML(b, s){
+  var html = '<span leaf=""><img src="'+b.src+'" alt="图片" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:'+s.radius+'px;"></span>';
+  if(b.cap){ html += '<p style="margin:0;padding:8px 0 0;font-size:12px;color:'+s.sub+';text-align:center;"><span leaf="">'+b.cap+'</span></p>'; }
+  return blockWrap(html, s, false);
+}
+
+function footerHTML(s){
+  // 尾区三个线性图标（与 byai-wechat-gzh-helper 在售版本同款）；校验器仅白名单放行这三个 svg
+  var iconTpl = function(svg, label){
+    return '<section style="text-align:center;color:'+s.text+';">'
+      + '<section style="width:42px;height:42px;display:flex;align-items:center;justify-content:center;margin:0 auto;background:'+s.light+';border:1px solid '+s.line+';border-radius:50%;">'+svg+'</section>'
+      + '<span style="font-size:11px;font-weight:600;display:block;padding-top:6px;"><span leaf="">'+label+'</span></span></section>';
+  };
+  var svgLike = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>';
+  var svgEye = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path></svg>';
+  var svgShare = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>';
+  var inner = '<section style="border-top:1px solid '+s.line+';padding-top:22px;text-align:center;">'
+    + '<p style="margin:0;padding:0 0 6px;font-size:13px;font-weight:700;color:'+s.heading+';"><span leaf="">'+(SPEC.author ? ('我是 '+SPEC.author+'，'+SPEC.intro) : SPEC.intro)+'</span></p>'
+    + '<p style="margin:0;padding:0 0 4px;font-size:12px;color:'+s.sub+';"><span leaf="">'+SPEC.outro+'</span></p>'
+    + '<p style="margin:0;padding:0 0 18px;font-size:12px;color:'+s.sub+';"><span leaf="">您的支持是我的动力</span></p>'
+    + '<section style="display:flex;justify-content:center;gap:24px;">'
+    + iconTpl(svgLike,"点赞") + iconTpl(svgEye,"在看") + iconTpl(svgShare,"转发")
+    + '</section>'
+    + '<p style="margin:0;padding:18px 0 0;font-size:10px;color:'+s.sub+';letter-spacing:2px;"><span leaf="">THANKS FOR READING</span></p></section>';
+  return blockWrap(inner, s, false, true);
+}
+
+function renderAll(){
+  var s = S();
+  var parts = [headerHTML(s)];
+  (SPEC.sections||[]).forEach(function(sec, i){
+    parts.push(headingHTML(i, themeHTML(sec.heading, s), s));
+    sec.blocks.forEach(function(b){
+      if(b.t==="p") parts.push(paraHTML(themeHTML(b.h, s), s));
+      else if(b.t==="quote") parts.push(quoteHTML(Object.assign({}, b, {h:themeHTML(b.h, s)}), s));
+      else if(b.t==="table") parts.push(tableHTML(b, s));
+      else if(b.t==="list") parts.push(listHTML(Object.assign({}, b, {items:b.items.map(function(it){return themeHTML(it, s);})}), s));
+      else if(b.t==="img") parts.push(imgHTML(b, s));
+    });
+  });
+  parts.push(footerHTML(s));
+  parts.push('<p style="display:none;"><mp-style-type data-value="3"></mp-style-type></p>');
+  // 五层嵌套底色：微信粘贴时剥最外 1~4 层节点样式（实测），L5 承载 padding/字体颜色；
+  // L1~L4 全带同色 background-color 兜底；每个块包装也自带同色底（双保险）；用长写增强清洗存活率。
+  contentEl.innerHTML = '<section style="max-width:677px;margin:0 auto;box-sizing:border-box;background-color:'+s.bg+';">'
+    + '<section style="background-color:'+s.bg+';">'
+    + '<section style="background-color:'+s.bg+';">'
+    + '<section style="background-color:'+s.bg+';">'
+    + '<section style="padding:16px;box-sizing:border-box;background-color:'+s.bg+';color:'+s.text+';font-family:'+s.font+';line-height:1.75;">'
+    + parts.join('') + '</section></section></section></section></section>';
+}
+
+// ===== 面板渲染 =====
+function renderPanel(){
+  var chips = document.getElementById('presetChips');
+  chips.innerHTML = '';
+  PRESETS.forEach(function(p, i){
+    var d = document.createElement('div');
+    d.className = 'chip' + (i===state.preset ? ' on' : '');
+    d.textContent = p.name;
+    d.onclick = function(){
+      state.preset = i; state.bgCustom = null;
+      // 用户没手动调过字号/间距/圆角时，跟随主题预设值（各主题设计值不同）
+      if(!state.touched){ state.fs = p.fs; state.gap = p.gap; state.radius = p.radius; }
+      syncControls(); renderAll(); renderPanel();
+    };
+    chips.appendChild(d);
+  });
+  var sw = document.getElementById('bgSwatches');
+  sw.innerHTML = '';
+  var curBg = state.bgCustom || PRESETS[state.preset].c.bg;
+  var bgs = [PRESETS[state.preset].c.bg].concat(BG_EXTRA);
+  bgs.forEach(function(color){
+    var d = document.createElement('div');
+    d.className = 'sw' + (color.toLowerCase()===curBg.toLowerCase() ? ' on' : '');
+    d.style.background = color;
+    d.title = color;
+    d.onclick = function(){ state.bgCustom = color; syncControls(); renderAll(); renderPanel(); };
+    sw.appendChild(d);
+  });
+  var custom = document.createElement('div');
+  custom.className = 'sw sw-custom';
+  custom.title = '自定义颜色';
+  custom.textContent = '+';
+  var inp = document.createElement('input');
+  inp.type = 'color'; inp.value = curBg;
+  inp.oninput = function(){ state.bgCustom = inp.value; syncControls(); renderAll(); renderPanel(); };
+  custom.appendChild(inp);
+  custom.onclick = function(){ inp.click(); };
+  sw.appendChild(custom);
+
+  var fs = document.getElementById('ctlFont');
+  if(!fs.options.length){
+    FONTS.forEach(function(f, i){
+      var o = document.createElement('option');
+      o.value = i; o.textContent = f.name;
+      try{ o.style.fontFamily = f.v; }catch(e){}
+      fs.appendChild(o);
+    });
+    fs.onchange = function(){ state.font = +fs.value; applyFontPreview(); renderAll(); };
+  }
+  fs.value = state.font;
+  applyFontPreview();
+
+  var hc = document.getElementById('hstyleChips');
+  hc.innerHTML = '';
+  HEADING_STYLES.forEach(function(name, i){
+    var d = document.createElement('div');
+    d.className = 'chip' + (i===state.hstyle ? ' on' : '');
+    d.textContent = name;
+    d.onclick = function(){ state.hstyle = i; renderPanel(); renderAll(); };
+    hc.appendChild(d);
+  });
+}
+
+function applyFontPreview(){
+  var fs = document.getElementById('ctlFont');
+  try{ fs.style.fontFamily = FONTS[state.font].v; }catch(e){}
+  // 移动端支持度提示：公众号禁 @font-face，发布后能否生效取决于读者设备是否装有该字体
+  var hint = document.getElementById('fontHint');
+  if(hint){ hint.textContent = '手机端支持度：' + FONTS[state.font].m; }
+}
+
+function syncControls(){
+  document.getElementById('ctlFs').value = state.fs;
+  document.getElementById('valFs').textContent = state.fs;
+  document.getElementById('ctlGap').value = state.gap;
+  document.getElementById('valGap').textContent = state.gap;
+  document.getElementById('ctlRadius').value = state.radius;
+  document.getElementById('valRadius').textContent = state.radius;
+}
+document.getElementById('ctlFs').oninput = function(e){ state.fs = +e.target.value; state.touched = true; syncControls(); renderAll(); };
+document.getElementById('ctlGap').oninput = function(e){ state.gap = +e.target.value; state.touched = true; syncControls(); renderAll(); };
+document.getElementById('ctlRadius').oninput = function(e){ state.radius = +e.target.value; state.touched = true; syncControls(); renderAll(); };
+
+function resetStyle(){
+  var p = PRESETS[0];
+  state = {preset:0, fs:p.fs, gap:p.gap, radius:p.radius, font:0, hstyle:0, bgCustom:null, touched:false};
+  syncControls(); renderAll(); renderPanel();
+  showToast('已恢复默认（电光蓝图）');
+}
+
+// ===== 复制 =====
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+}
+function gzhCopy(){
+  // 1) 取当前样式的完整 HTML
+  // 结构本身已是五层同色底嵌套（见 renderAll），公众号剥掉外层 1~4 层后内层底色仍存活。
+  // ⚠️ 此处不要再对最外层做任何样式剥离——剥空外层会让内层底色变成事实上的最外层节点，被微信清洗掉。
+  var html = contentEl.innerHTML;
+  // 2) 纯文本备份（部分编辑器粘贴时只接 text/plain）
+  var plain = contentEl.innerText || '';
+
+  var done = function(ok){
+    if(ok){
+      showToast('文章已复制，去公众号编辑器上Ctrl+V粘贴');
+      var b = document.getElementById('copyBtn'), old = b.textContent;
+      b.textContent = '✅ 已复制';
+      setTimeout(function(){ b.textContent = old; }, 2200);
+    }else{
+      showToast('⚠ 自动复制失败，请手动全选(Ctrl/⌘+A)再复制(Ctrl/⌘+C)');
+    }
+  };
+
+  // 3) 优先用现代 clipboard API（HTTPS / 多数浏览器支持），可写出 text/html + text/plain 双格式
+  if(navigator.clipboard && window.ClipboardItem){
+    try{
+      var item = new ClipboardItem({
+        'text/html': new Blob([html], {type:'text/html'}),
+        'text/plain': new Blob([plain], {type:'text/plain'})
+      });
+      navigator.clipboard.write([item]).then(function(){ done(true); })
+                                      .catch(function(){ fallbackExec(); });
+      return;
+    }catch(e){ /* 继续 fallback */ }
+  }
+
+  // 4) Fallback：旧路径 selectNodeContents + execCommand
+  fallbackExec();
+
+  function fallbackExec(){
+    var range = document.createRange();
+    range.selectNodeContents(contentEl);
+    var sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+    var ok = false;
+    try{ ok = document.execCommand('copy'); }catch(e){ ok = false; }
+    sel.removeAllRanges();
+    done(ok);
+  }
+}
+
+// ===== 启动 =====
+syncControls();
+renderPanel();
+renderAll();
+</script>
+</body>
+</html>
