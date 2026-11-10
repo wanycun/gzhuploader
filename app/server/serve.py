@@ -18,7 +18,7 @@ from socketserver import UnixStreamServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 TARGET = os.path.dirname(HERE)
 WWW = os.path.join(TARGET, 'www')
-APP_VERSION = '3.11.2'
+APP_VERSION = '3.12.0'
 SOCK = os.path.join(TARGET, 'app.sock')
 PREFIX = '/app/gzhuploader'
 API = 'https://api.weixin.qq.com'
@@ -34,6 +34,58 @@ def var_dir():
 
 def load_config():
     return json.load(open(os.path.join(data_dir(), 'config.json')))
+
+
+GITHUB_OWNER = "wanycun"
+GITHUB_REPO = "gzhuploader"
+GITHUB_URL = "https://github.com/wanycun/gzhuploader"
+UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/wanycun/gzhuploader/main/manifest"
+
+
+def handle_check_update():
+    try:
+        req = urllib.request.Request(UPDATE_MANIFEST_URL, headers={"User-Agent": "gzhuploader-update-check"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception as e:
+        return {"ok": False, "error": "读不到 GitHub 上的版本信息：" + str(e)[:120]}
+    m = re.search(r"(?m)^version\s*=\s*(.+)$", text)
+    if not m:
+        return {"ok": False, "error": "GitHub 上的版本信息格式不对"}
+    latest = m.group(1).strip()
+    def vt(s):
+        out = []
+        for part in s.split("."):
+            d = re.match(r"\d+", part)
+            out.append(int(d.group(0)) if d else 0)
+        return out
+    return {"ok": True, "current": APP_VERSION, "latest": latest, "has_update": vt(latest) > vt(APP_VERSION), "repo": GITHUB_URL}
+
+
+GITHUB_OWNER = "wanycun"
+GITHUB_REPO = "gzhuploader"
+GITHUB_URL = "https://github.com/wanycun/gzhuploader"
+UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/wanycun/gzhuploader/main/manifest"
+
+
+def handle_check_update():
+    try:
+        req = urllib.request.Request(UPDATE_MANIFEST_URL, headers={"User-Agent": "gzhuploader-update-check"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception as e:
+        return {"ok": False, "error": "读不到 GitHub 上的版本信息：" + str(e)[:120]}
+    m = re.search(r"(?m)^version\s*=\s*(.+)$", text)
+    if not m:
+        return {"ok": False, "error": "GitHub 上的版本信息格式不对"}
+    latest = m.group(1).strip()
+    def vt(s):
+        out = []
+        for part in s.split("."):
+            d = re.match(r"\d+", part)
+            out.append(int(d.group(0)) if d else 0)
+        return out
+    return {"ok": True, "current": APP_VERSION, "latest": latest, "has_update": vt(latest) > vt(APP_VERSION), "repo": GITHUB_URL}
 
 
 def egress_ip():
@@ -762,6 +814,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({'ok': True, 'version': APP_VERSION,
                                    'env': '%s · %s' % (un.sysname, un.machine),
                                    'data_dir': data_dir()})
+            if path == '/check-update':
+                return self._json(handle_check_update())
             if path == '/state.json':
                 return self._json(self.state())
             if path == '/drafts.json':

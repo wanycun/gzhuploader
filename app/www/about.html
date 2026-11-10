@@ -58,6 +58,8 @@
     <div class="row"><span>运行环境</span><span id="v-env">—</span></div>
     <div class="row"><span>数据目录</span><span id="v-data" style="text-align:right;overflow-wrap:anywhere">—</span></div>
     <div class="row"><span>出品</span><span>CHUN折腾</span></div>
+    <div class="row"><span>项目主页</span><a class="lnk" href="https://github.com/wanycun/gzhuploader" target="_blank" rel="noopener">github.com/wanycun/gzhuploader</a></div>
+    <div class="row"><span>版本检查</span><span><button id="btn-upd" style="background:#3B5BFD;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:13px;cursor:pointer">检查更新</button> <span id="upd-msg" class="mut"></span></span></div>
   </div>
 
   <div class="card">
@@ -74,6 +76,7 @@
   <div class="card">
     <h2>更新记录</h2>
     <ul class="log">
+      <li><b>3.12</b> · 正式开源到 GitHub（wanycun/gzhuploader）；关于页可一键检查更新</li>
       <li><b>3.11.1</b> · 修复仪表盘一直加载中（引导脚本位置错误）</li>
       <li><b>3.11</b> · 安装向导：装的时候就能填公众号与 DeepSeek 密钥（可留空）；仪表盘与设置页加了上手引导</li>
       <li><b>3.10</b> · 排版页可直接改文字与图片；编辑页只留标题、副标题与封面；独立的「关于」页</li>
@@ -97,6 +100,19 @@ fetch('/app/gzhuploader/about.json').then(function (r) { return r.json(); }).the
   document.getElementById('v-env').textContent = r.env || '—';
   document.getElementById('v-data').textContent = r.data_dir || '—';
 }).catch(function () {});
+var ub = document.getElementById('btn-upd');
+if (ub) ub.addEventListener('click', function () {
+  var msg = document.getElementById('upd-msg');
+  msg.textContent = '检查中…';
+  fetch('/app/gzhuploader/check-update').then(function (r) { return r.json(); }).then(function (r) {
+    if (!r.ok) { msg.textContent = r.error || '检查失败'; return; }
+    if (r.has_update) {
+      msg.innerHTML = '发现新版本 v' + r.latest + '，<a class="lnk" href="' + r.repo + '" target="_blank" rel="noopener">去 GitHub 下载</a>';
+    } else {
+      msg.textContent = '已是最新版本（v' + r.current + '）';
+    }
+  }).catch(function () { msg.textContent = '检查失败（网络）'; });
+});
 </script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 appname               = gzhuploader
-version               = 3.11.2
+version               = 3.12.0
 display_name          = 公众号助手
 desc                  = 公众号助手：把文章从 NAS 本地推入微信公众号草稿箱——点包上传、编辑文案、排版定稿、AI 生成、草稿箱与运行日志，密钥只存本机。
-platform              = x86
+platform              = arm
 source                = thirdparty
 maintainer            = CHUN
 distributor           = CHUN
