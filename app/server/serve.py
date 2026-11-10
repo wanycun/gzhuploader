@@ -18,7 +18,7 @@ from socketserver import UnixStreamServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 TARGET = os.path.dirname(HERE)
 WWW = os.path.join(TARGET, 'www')
-APP_VERSION = '3.12.0'
+APP_VERSION = '3.13.0'
 SOCK = os.path.join(TARGET, 'app.sock')
 PREFIX = '/app/gzhuploader'
 API = 'https://api.weixin.qq.com'
@@ -86,6 +86,180 @@ def handle_check_update():
             out.append(int(d.group(0)) if d else 0)
         return out
     return {"ok": True, "current": APP_VERSION, "latest": latest, "has_update": vt(latest) > vt(APP_VERSION), "repo": GITHUB_URL}
+
+
+
+AI_PRESETS = {
+    'deepseek': ('DeepSeek', 'https://api.deepseek.com', 'deepseek-chat', ''),
+    'openai': ('OpenAI', 'https://api.openai.com/v1', 'gpt-4o-mini', 'gpt-image-1'),
+    'qwen': ('通义千问', 'https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen-plus', 'wanx2.1-t2i-turbo'),
+    'moonshot': ('Kimi (Moonshot)', 'https://api.moonshot.cn/v1', 'moonshot-v1-8k', ''),
+    'zhipu': ('智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', 'glm-4-flash', 'cogview-3-flash'),
+    'siliconflow': ('硅基流动', 'https://api.siliconflow.cn/v1', 'deepseek-ai/DeepSeek-V3', 'Kwai-Kolors/Kolors'),
+    'ollama': ('本地 Ollama', 'http://localhost:11434/v1', 'qwen3:4b', ''),
+    'custom': ('自定义', '', '', ''),
+}
+DEFAULT_COVER_PROMPT = '为公众号文章《{title}》画一张封面插图：electric blueprint 电蓝图风，粗线条，高亮的白色与青色线稿，深蓝图纸底，主体醒目、充满画面，不要出现任何文字。'
+
+
+def ai_conf(st):
+    prov = st.get('ai_provider') or 'deepseek'
+    preset = AI_PRESETS.get(prov, AI_PRESETS['deepseek'])
+    return {'provider': prov,
+            'base': (st.get('ai_base_url') or preset[1]).rstrip('/'),
+            'key': (st.get('ai_key') or '').strip(),
+            'model': st.get('ai_model') or preset[2],
+            'draw_model': (st.get('ai_draw_model') or '').strip(),
+            'cover_prompt': st.get('cover_prompt') or DEFAULT_COVER_PROMPT}
+
+
+def ai_post(conf, path, payload, timeout=150):
+    headers = {'Content-Type': 'application/json'}
+    if conf['key']:
+        headers['Authorization'] = 'Bearer ' + conf['key']
+    req = urllib.request.Request(conf['base'] + path,
+                                 data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                                 headers=headers)
+    return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+
+
+def ai_chat(conf, messages, temperature=0.7):
+    payload = {'model': conf['model'], 'messages': messages,
+               'temperature': temperature,
+               'response_format': {'type': 'json_object'}}
+    try:
+        return ai_post(conf, '/chat/completions', payload)
+    except urllib.error.HTTPError as e:
+        if e.code != 400:
+            raise
+        payload.pop('response_format', None)
+        return ai_post(conf, '/chat/completions', payload)
+
+
+def read_png_rgb(data):
+    import zlib as _z
+    import struct as _st
+    assert data[:8] == b'\x89PNG\r\n\x1a\n', 'not png'
+    pos = 8
+    idat = b''
+    plte = None
+    w = h = depth = ctype = None
+    while pos < len(data):
+        ln = _st.unpack('>I', data[pos:pos + 4])[0]
+        tag = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + ln]
+        if tag == b'IHDR':
+            w, h, depth, ctype = _st.unpack('>IIBB', body[:10])
+        elif tag == b'PLTE':
+            plte = body
+        elif tag == b'IDAT':
+            idat += body
+        pos += 12 + ln
+    assert depth == 8 and ctype in (0, 2, 3, 6), 'unsupported png type %s/%s' % (depth, ctype)
+    nch = {0: 1, 2: 3, 3: 1, 6: 4}[ctype]
+    raw = _z.decompress(idat)
+    stride = w * nch
+    rows = []
+    prev = bytearray(stride)
+    i = 0
+    for y in range(h):
+        ft = raw[i]
+        i += 1
+        line = bytearray(raw[i:i + stride])
+        i += stride
+        if ft == 1:
+            for x in range(nch, stride):
+                line[x] = (line[x] + line[x - nch]) & 255
+        elif ft == 2:
+            for x in range(stride):
+                line[x] = (line[x] + prev[x]) & 255
+        elif ft == 3:
+            for x in range(stride):
+                a = line[x - nch] if x >= nch else 0
+                line[x] = (line[x] + ((a + prev[x]) >> 1)) & 255
+        elif ft == 4:
+            for x in range(stride):
+                a = line[x - nch] if x >= nch else 0
+                b = prev[x]
+                c = prev[x - nch] if x >= nch else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[x] = (line[x] + pr) & 255
+        row = []
+        for x in range(w):
+            o = x * nch
+            if ctype == 6:
+                row.append((line[o], line[o + 1], line[o + 2]))
+            elif ctype == 2:
+                row.append((line[o], line[o + 1], line[o + 2]))
+            elif ctype == 0:
+                g = line[o]
+                row.append((g, g, g))
+            else:
+                idx = line[o] * 3
+                row.append((plte[idx], plte[idx + 1], plte[idx + 2]))
+        rows.append(row)
+        prev = line
+    return w, h, rows
+
+
+def save_cover_image(pdir, data):
+    w, h, rows = read_png_rgb(data)
+    TW, TH = 900, 383
+    target = TW / TH
+    if w / h > target:
+        nw = int(h * target)
+        x0 = (w - nw) // 2
+        rows = [r[x0:x0 + nw] for r in rows]
+        w = nw
+    else:
+        nh = int(w / target)
+        y0 = (h - nh) // 2
+        rows = rows[y0:y0 + nh]
+        h = nh
+    def pixel(x, y):
+        return rows[min(h - 1, y * h // TH)][min(w - 1, x * w // TW)]
+    write_png(os.path.join(pdir, 'cover.png'), TW, TH, pixel)
+
+
+def ai_cover(pdir, title, conf):
+    if not conf['draw_model']:
+        return False
+    if not conf['key'] and conf['provider'] != 'ollama':
+        return False
+    prompt = conf['cover_prompt'].replace('{title}', title or '')
+    payload = {'model': conf['draw_model'], 'prompt': prompt,
+               'response_format': 'b64_json'}
+    try:
+        r = ai_post(conf, '/images/generations', payload, timeout=120)
+    except urllib.error.HTTPError as e:
+        if e.code != 400:
+            raise
+        payload.pop('response_format', None)
+        r = ai_post(conf, '/images/generations', payload, timeout=120)
+    item = (r.get('data') or [{}])[0]
+    raw = None
+    if item.get('b64_json'):
+        import base64 as _b64
+        raw = _b64.b64decode(item['b64_json'])
+    elif item.get('url'):
+        raw = urllib.request.urlopen(item['url'], timeout=60).read()
+    if not raw or raw[:4] != b'\x89PNG':
+        return False
+    save_cover_image(pdir, raw)
+    return True
+
+
+def make_cover(pdir, title):
+    conf = ai_conf(load_settings())
+    try:
+        if ai_cover(pdir, title, conf):
+            return 'ai'
+    except Exception as e:
+        log_run('ai-cover failed: %s' % str(e)[:150])
+    default_cover(pdir)
+    return 'python'
 
 
 def egress_ip():
@@ -331,32 +505,25 @@ def load_ai():
 
 def do_generate(topic, notes):
     st = load_settings()
-    key = (st.get('ds_key') or '').strip()
-    if not key:
-        return {'ok': False, 'stage': 'ai_config', 'error': '先在设置页填 DeepSeek API key'}
-    model = st.get('ds_model') or 'deepseek-chat'
+    conf = ai_conf(st)
+    if not conf['key'] and conf['provider'] != 'ollama':
+        return {'ok': False, 'stage': 'ai_config', 'error': '先在设置页填 AI 密钥（或选本地 Ollama）'}
+    if not conf['base']:
+        return {'ok': False, 'stage': 'ai_config', 'error': '先在设置页填 AI 接口地址'}
+    model = conf['model']
     user_msg = '主题：%s' % topic
     if notes:
         user_msg += '\n备注要点：%s' % notes
     sys_prompt = GEN_SYSTEM.replace('CHUN折腾', st.get('label') or '公众号')
     sys_prompt = sys_prompt.replace('作者 CHUN', '作者' + (st.get('author') or ''))
-    payload = {'model': model,
-               'messages': [{'role': 'system', 'content': sys_prompt},
-                            {'role': 'user', 'content': user_msg}],
-               'temperature': 0.7,
-               'response_format': {'type': 'json_object'}}
-    req = urllib.request.Request(
-        'https://api.deepseek.com/chat/completions',
-        data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-        headers={'Content-Type': 'application/json',
-                 'Authorization': 'Bearer ' + key})
     try:
-        r = json.loads(urllib.request.urlopen(req, timeout=150).read())
+        r = ai_chat(conf, [{'role': 'system', 'content': sys_prompt},
+                           {'role': 'user', 'content': user_msg}])
     except urllib.error.HTTPError as e:
-        return {'ok': False, 'stage': 'deepseek',
-                'error': 'DeepSeek 返回 %s: %s' % (e.code, e.read()[:300])}
+        return {'ok': False, 'stage': 'ai',
+                'error': 'AI 接口返回 %s: %s' % (e.code, e.read()[:300])}
     except Exception as e:
-        return {'ok': False, 'stage': 'deepseek', 'error': str(e)}
+        return {'ok': False, 'stage': 'ai', 'error': str(e)}
     content = r['choices'][0]['message']['content']
     try:
         art = json.loads(content)
@@ -373,6 +540,7 @@ def do_generate(topic, notes):
           % (title, st.get('author', ''), digest, md))
     with open(os.path.join(pdir, 'article.md'), 'w', encoding='utf-8') as f:
         f.write(fm)
+    make_cover(pdir, title)
     log_run('GEN pkg=jobs/%s topic=%s (via app)' % (name, topic))
     return {'ok': True, 'name': name, 'title': title}
 
@@ -460,6 +628,16 @@ def load_settings():
     st.setdefault('label', 'CHUN折腾')
     st.setdefault('intro', '我不评测，我只把东西做出来')
     st.setdefault('ds_model', 'deepseek-chat')
+    if 'ai_provider' not in st:
+        st['ai_provider'] = 'deepseek'
+    if 'ai_base_url' not in st:
+        st['ai_base_url'] = AI_PRESETS.get(st.get('ai_provider'), AI_PRESETS['deepseek'])[1]
+    if 'ai_key' not in st:
+        st['ai_key'] = st.get('ds_key', '')
+    if 'ai_model' not in st:
+        st['ai_model'] = st.get('ds_model', 'deepseek-chat')
+    st.setdefault('ai_draw_model', '')
+    st.setdefault('cover_prompt', DEFAULT_COVER_PROMPT)
     return st
 
 
@@ -738,6 +916,7 @@ class Handler(BaseHTTPRequestHandler):
             stx = load_settings()
             st['wx_set'] = bool(stx.get('wx_appid')) and bool(stx.get('wx_secret'))
             st['ds_set'] = bool(stx.get('ds_key'))
+            st['ai_set'] = bool(ai_conf(stx)['key']) or ai_conf(stx)['provider'] == 'ollama'
         except Exception:
             cfg = None
         jd = os.path.join(real, 'jobs')
@@ -827,6 +1006,12 @@ class Handler(BaseHTTPRequestHandler):
                                    'wx_secret_set': bool(st.get('wx_secret')),
                                    'ds_key_set': bool(st.get('ds_key')),
                                    'ds_model': st.get('ds_model', 'deepseek-chat'),
+                                   'ai_provider': st.get('ai_provider', 'deepseek'),
+                                   'ai_base_url': st.get('ai_base_url', ''),
+                                   'ai_key_set': bool(st.get('ai_key')),
+                                   'ai_model': st.get('ai_model', 'deepseek-chat'),
+                                   'ai_draw_model': st.get('ai_draw_model', ''),
+                                   'cover_prompt': st.get('cover_prompt', ''),
                                    'author': st.get('author', ''),
                                    'label': st.get('label', ''),
                                    'intro': st.get('intro', ''),
@@ -946,13 +1131,19 @@ class Handler(BaseHTTPRequestHandler):
                                    'wx_secret_set': bool(st.get('wx_secret')),
                                    'ds_key_set': bool(st.get('ds_key')),
                                    'ds_model': st.get('ds_model', 'deepseek-chat'),
+                                   'ai_provider': st.get('ai_provider', 'deepseek'),
+                                   'ai_base_url': st.get('ai_base_url', ''),
+                                   'ai_key_set': bool(st.get('ai_key')),
+                                   'ai_model': st.get('ai_model', 'deepseek-chat'),
+                                   'ai_draw_model': st.get('ai_draw_model', ''),
+                                   'cover_prompt': st.get('cover_prompt', ''),
                                    'author': st.get('author', ''),
                                    'label': st.get('label', ''),
                                    'intro': st.get('intro', ''),
                                    'api_token_set': bool(st.get('api_token'))})
             if path == '/settings-save':
                 st = load_settings()
-                for k in ('wx_appid', 'ds_model', 'author', 'label', 'intro'):
+                for k in ('wx_appid', 'ds_model', 'author', 'label', 'intro', 'ai_provider', 'ai_base_url', 'ai_model', 'ai_draw_model', 'cover_prompt'):
                     if k in data and str(data[k]).strip() != '':
                         st[k] = str(data[k]).strip()
                 if data.get('wx_secret'):
@@ -963,6 +1154,8 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                 if data.get('ds_key'):
                     st['ds_key'] = str(data['ds_key']).strip()
+                if data.get('ai_key'):
+                    st['ai_key'] = str(data['ai_key']).strip()
                 save_settings(st)
                 return self._json({'ok': True})
             if path == '/save-spec':
@@ -1017,8 +1210,14 @@ class Handler(BaseHTTPRequestHandler):
                 pdir = os.path.join(data_dir(), 'jobs', name)
                 if not os.path.isdir(pdir):
                     return self._json({'ok': False, 'error': '包不存在'}, 404)
-                default_cover(pdir)
-                return self._json({'ok': True})
+                title = name
+                try:
+                    meta, _b = parse_front_matter(open(os.path.join(pdir, 'article.md'), encoding='utf-8').read())
+                    title = meta.get('title') or name
+                except Exception:
+                    pass
+                mode = make_cover(pdir, title)
+                return self._json({'ok': True, 'mode': mode})
             if path == '/upload':
                 name = data.get('name', '')
                 if not re.fullmatch(r'[A-Za-z0-9._-]+', name or ''):

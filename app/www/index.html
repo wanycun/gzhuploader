@@ -117,7 +117,7 @@ fetch('/app/gzhuploader/state.json').then(function (r) { return r.json(); }).the
     txt.textContent = '还差一步就能上传草稿：填公众号 AppID 与 AppSecret（微信公众平台 → 设置与开发 → 基本配置），并把本页显示的出口 IP 加进公众号 IP 白名单。';
   } else if (!r.ds_set) {
     card.style.display = '';
-    txt.textContent = '公众号已配置好。再填一个 DeepSeek API Key（可选），「文案生成」就能按主题帮你出稿。';
+    txt.textContent = '公众号已配置好。再填一个 AI 密钥（可选，任意服务商），「文案生成」就能按主题帮你出稿。';
   }
 }).catch(function () {});
 </script>

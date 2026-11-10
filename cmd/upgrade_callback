@@ -9,7 +9,8 @@ var = os.environ.get('TRIM_PKGVAR', '')
 vals = {}
 for key, env in (('wx_appid', 'wizard_wx_appid'),
                  ('wx_secret', 'wizard_wx_secret'),
-                 ('ds_key', 'wizard_ds_key')):
+                 ('ds_key', 'wizard_ds_key'),
+                 ('ai_key', 'wizard_ds_key')):
     v = (os.environ.get(env) or '').strip()
     if v:
         vals[key] = v

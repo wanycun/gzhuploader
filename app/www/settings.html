@@ -62,7 +62,7 @@
 <body>
 <div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a href="/app/gzhuploader/packages">文章包</a><a href="/app/gzhuploader/generate">文案生成</a><a href="/app/gzhuploader/drafts">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a class="on" href="javascript:void(0)">设置</a><a href="/app/gzhuploader/about">关于</a></div>
 <div class="wrap">
-  <div class="card"><h2>三步开始</h2><div class="mut">① 在下面填公众号 AppID 与 AppSecret（微信公众平台 → 设置与开发 → 基本配置）；② 把仪表盘显示的出口 IP 加进公众号的 IP 白名单（开发 → 基本配置 → 公众号开发信息），不加会报 40164；③ 想要 AI 写文案，再填 DeepSeek API Key（可选）。</div></div>
+  <div class="card"><h2>三步开始</h2><div class="mut">① 在下面填公众号 AppID 与 AppSecret（微信公众平台 → 设置与开发 → 基本配置）；② 把仪表盘显示的出口 IP 加进公众号的 IP 白名单（开发 → 基本配置 → 公众号开发信息），不加会报 40164；③ 想要 AI 写文案，再填 AI 密钥（可选，任意服务商）。</div></div>
 
   <h1>设置</h1>
   <div class="sub">密钥只保存在这台 NAS 的应用数据里，不回显、不外传。留空表示不修改。</div>
@@ -77,11 +77,29 @@
   </div>
 
   <div class="card">
-    <h2>AI 文案生成（DeepSeek）</h2>
+    <h2>AI（文案生成 + 封面绘图）</h2>
+    <label>服务商</label>
+    <select id="f-provider">
+      <option value="deepseek">DeepSeek</option>
+      <option value="openai">OpenAI</option>
+      <option value="qwen">通义千问</option>
+      <option value="moonshot">Kimi (Moonshot)</option>
+      <option value="zhipu">智谱 GLM</option>
+      <option value="siliconflow">硅基流动</option>
+      <option value="ollama">本地 Ollama</option>
+      <option value="custom">自定义</option>
+    </select>
+    <label>接口地址（OpenAI 兼容）</label>
+    <input type="text" id="f-base" placeholder="https://api.deepseek.com">
     <label>API Key<span class="state" id="ds-state"></span></label>
     <input type="password" id="f-dskey" placeholder="留空不修改">
-    <label>模型</label>
+    <label>文案模型</label>
     <input type="text" id="f-model">
+    <label>绘图模型（封面，可留空）</label>
+    <input type="text" id="f-draw" placeholder="如 gpt-image-1 / Kwai-Kolors/Kolors；留空则用程序绘制的默认封面">
+    <label>封面提示词（{title} 会替换成文章标题）</label>
+    <textarea id="f-prompt" rows="3"></textarea>
+    <div class="hint">填了绘图模型时，「默认封面」按钮与文案生成会先调模型出图，失败自动回退到程序绘制的电蓝图封面；没填绘图模型就一直用程序绘制。</div>
   </div>
 
   <div class="card">
@@ -114,20 +132,44 @@ async function load() {
   if (!r.ok) { msg('读取失败', false); return; }
   $('f-appid').value = r.wx_appid || '';
   $('secret-state').innerHTML = r.wx_secret_set ? '<span class="ok">已设置</span>' : '<span class="bad">未设置</span>';
-  $('ds-state').innerHTML = r.ds_key_set ? '<span class="ok">已设置</span>' : '<span class="bad">未设置</span>';
-  $('f-model').value = r.ds_model || 'deepseek-chat';
+  $('ds-state').innerHTML = r.ai_key_set ? '<span class="ok">已设置</span>' : '<span class="bad">未设置</span>';
+  $('f-provider').value = r.ai_provider || 'deepseek';
+  $('f-base').value = r.ai_base_url || '';
+  $('f-model').value = r.ai_model || 'deepseek-chat';
+  $('f-draw').value = r.ai_draw_model || '';
+  $('f-prompt').value = r.cover_prompt || '';
   $('f-author').value = r.author || '';
   $('f-label').value = r.label || '';
   $('f-intro').value = r.intro || '';
 }
 load();
 
+const PRESETS = {
+  deepseek: ['https://api.deepseek.com', 'deepseek-chat', ''],
+  openai: ['https://api.openai.com/v1', 'gpt-4o-mini', 'gpt-image-1'],
+  qwen: ['https://dashscope.aliyuncs.com/compatible-mode/v1', 'qwen-plus', 'wanx2.1-t2i-turbo'],
+  moonshot: ['https://api.moonshot.cn/v1', 'moonshot-v1-8k', ''],
+  zhipu: ['https://open.bigmodel.cn/api/paas/v4', 'glm-4-flash', 'cogview-3-flash'],
+  siliconflow: ['https://api.siliconflow.cn/v1', 'deepseek-ai/DeepSeek-V3', 'Kwai-Kolors/Kolors'],
+  ollama: ['http://localhost:11434/v1', 'qwen3:4b', ''],
+  custom: ['', '', '']
+};
+$('f-provider').addEventListener('change', () => {
+  const p = PRESETS[$('f-provider').value];
+  if (!p) return;
+  if (p[0]) $('f-base').value = p[0];
+  if (p[1]) $('f-model').value = p[1];
+  $('f-draw').value = p[2];
+});
+
 $('btn-save').onclick = async () => {
   $('btn-save').disabled = true; msg('保存中…');
   const body = { wx_appid: $('f-appid').value, ds_model: $('f-model').value,
-    author: $('f-author').value, label: $('f-label').value, intro: $('f-intro').value };
+    author: $('f-author').value, label: $('f-label').value, intro: $('f-intro').value,
+    ai_provider: $('f-provider').value, ai_base_url: $('f-base').value,
+    ai_model: $('f-model').value, ai_draw_model: $('f-draw').value, cover_prompt: $('f-prompt').value };
   if ($('f-secret').value) body.wx_secret = $('f-secret').value;
-  if ($('f-dskey').value) body.ds_key = $('f-dskey').value;
+  if ($('f-dskey').value) { body.ds_key = $('f-dskey').value; body.ai_key = $('f-dskey').value; }
   const r = await (await fetch(BASE + '/settings-save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})).json();
   msg(r.ok ? '设置已保存' : '保存失败：' + (r.error || ''), r.ok);
   if (r.ok) { $('f-secret').value = ''; $('f-dskey').value = ''; load(); }
