@@ -1,0 +1,32 @@
+#!/bin/bash
+# Merge wizard-provided keys into settings.json. Only non-empty values are
+# written; existing settings are preserved. Used by install/upgrade callbacks.
+python3 - <<'PYEOF'
+import json
+import os
+
+var = os.environ.get('TRIM_PKGVAR', '')
+vals = {}
+for key, env in (('wx_appid', 'wizard_wx_appid'),
+                 ('wx_secret', 'wizard_wx_secret'),
+                 ('ds_key', 'wizard_ds_key')):
+    v = (os.environ.get(env) or '').strip()
+    if v:
+        vals[key] = v
+if var and vals:
+    path = os.path.join(var, 'settings.json')
+    st = {}
+    if os.path.exists(path):
+        try:
+            with open(path, encoding='utf-8') as f:
+                st = json.load(f)
+        except Exception:
+            st = {}
+    st.update(vals)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(st, f, ensure_ascii=False, indent=1)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+PYEOF
+exit 0

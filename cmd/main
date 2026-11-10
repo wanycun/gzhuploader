@@ -1,0 +1,45 @@
+#!/bin/bash
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+DATA_LINK="${TRIM_APPDEST}/data"
+LEGACY_DIR="/vol1/@appdata/gzh-uploader"
+
+ensure_link() {
+    mkdir -p "${TRIM_PKGVAR}"
+    if [ -d "${LEGACY_DIR}" ] && [ ! -e "${DATA_LINK}" ]; then
+        ln -s "${LEGACY_DIR}" "${DATA_LINK}" 2>/dev/null || true
+    fi
+    if [ ! -e "${DATA_LINK}" ]; then
+        mkdir -p "${TRIM_PKGVAR}/gzh-data/jobs"
+        ln -s "${TRIM_PKGVAR}/gzh-data" "${DATA_LINK}" 2>/dev/null || true
+    fi
+}
+
+case "$1" in
+    start)
+        ensure_link
+        if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+            exit 0
+        fi
+        cd "${TRIM_APPDEST}" || exit 1
+        nohup python3 "${TRIM_APPDEST}/server/serve.py" >> "${LOG_FILE}" 2>&1 &
+        echo $! > "${PID_FILE}"
+        exit 0
+        ;;
+    stop)
+        if [ -f "${PID_FILE}" ]; then
+            kill "$(cat "${PID_FILE}")" 2>/dev/null || true
+            rm -f "${PID_FILE}"
+        fi
+        exit 0
+        ;;
+    status)
+        if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+            exit 0
+        fi
+        exit 3
+        ;;
+    *)
+        exit 1
+        ;;
+esac
