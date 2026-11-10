@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>关于 · 公众号助手</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#F7F8FA; color:#23272F; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+  .sidebar { position:fixed; left:0; top:0; bottom:0; width:208px; background:#fff; border-right:1px solid #E3E6EA; padding:18px 12px; z-index:50; }
+  .sidebar .logo { font-weight:700; font-size:15px; color:#111827; padding:2px 10px 16px; }
+  .sidebar a { display:block; color:#5B6470; text-decoration:none; font-size:14px; padding:8px 10px; border-radius:8px; margin-bottom:2px; cursor:pointer; }
+  .sidebar a:hover { background:#F0F2F5; color:#111827; }
+  .sidebar a.on { background:#EEF2FF; color:#2F4BE0; font-weight:600; }
+  .wrap { max-width:880px; margin:0 auto; padding:22px 18px 28px; }
+  body { padding-left:208px; }
+  @media (max-width:760px) {
+    .sidebar { position:fixed; left:0; right:0; top:0; bottom:auto; width:auto; height:52px; padding:0 10px; display:flex; align-items:center; gap:2px; border-right:none; border-bottom:1px solid #E3E6EA; overflow-x:auto; }
+    .sidebar .logo { display:none !important; }
+    .sidebar a { display:inline-block; margin:0; padding:6px 9px; white-space:nowrap; }
+    body { padding-left:0; padding-top:52px; }
+    .wrap { padding:16px 12px 28px; }
+    h1 { font-size:18px; }
+  }
+  h1 { font-size:20px; margin:2px 0 4px; color:#111827; }
+  .card { background:#fff; border:1px solid #E3E6EA; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .card h2 { font-size:13px; margin:0 0 12px; color:#666E7A; font-weight:600; letter-spacing:.04em; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EFF1F4; }
+  .row:last-child { border-bottom:none; }
+  .mut { color:#666E7A; font-size:13px; line-height:1.7; }
+  .apphead { display:flex; gap:14px; align-items:center; }
+  .appic { width:56px; height:56px; border-radius:14px; background:#3B5BFD; color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .appname { font-size:17px; font-weight:700; color:#111827; }
+  ul.feat { margin:0; padding-left:18px; line-height:2; font-size:13.5px; }
+  ul.log { margin:0; padding-left:18px; line-height:1.9; font-size:13px; color:#3C4450; }
+  ul.log b { color:#111827; }
+  a.lnk { color:#2F4BE0; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a href="/app/gzhuploader/packages">文章包</a><a href="/app/gzhuploader/generate">文案生成</a><a href="/app/gzhuploader/drafts">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a href="/app/gzhuploader/settings">设置</a><a class="on" href="javascript:void(0)">关于</a></div>
+<div class="wrap">
+  <h1>关于</h1>
+
+  <div class="card">
+    <div class="apphead">
+      <div class="appic">✈</div>
+      <div>
+        <div class="appname">公众号助手</div>
+        <div class="mut">把 Markdown 文章排版后一键送进公众号草稿箱的小工具，跑在自己的飞牛 NAS 上。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>应用信息</h2>
+    <div class="row"><span>版本</span><span id="v-ver">—</span></div>
+    <div class="row"><span>运行环境</span><span id="v-env">—</span></div>
+    <div class="row"><span>数据目录</span><span id="v-data" style="text-align:right;overflow-wrap:anywhere">—</span></div>
+    <div class="row"><span>出品</span><span>CHUN折腾</span></div>
+  </div>
+
+  <div class="card">
+    <h2>能做什么</h2>
+    <ul class="feat">
+      <li>文章包管理：标题、副标题（摘要）、封面都在「编辑」页搞定</li>
+      <li>三套原创排版主题，参数可调；正文与配图在排版页直接改</li>
+      <li>一键上传到公众号草稿箱，草稿箱可查可删</li>
+      <li>文案生成：给个主题，AI 按你的账号口径出稿</li>
+      <li>令牌 API：让其他 AI / 脚本也能建包、排版、上传（见 <a class="lnk" href="/app/gzhuploader/api">接入说明</a>）</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>更新记录</h2>
+    <ul class="log">
+      <li><b>3.11.1</b> · 修复仪表盘一直加载中（引导脚本位置错误）</li>
+      <li><b>3.11</b> · 安装向导：装的时候就能填公众号与 DeepSeek 密钥（可留空）；仪表盘与设置页加了上手引导</li>
+      <li><b>3.10</b> · 排版页可直接改文字与图片；编辑页只留标题、副标题与封面；独立的「关于」页</li>
+      <li><b>3.9</b> · 令牌 API（10039 端口）与接入说明页</li>
+      <li><b>3.8</b> · 独立版：新装零配置可用，x86 / arm 双架构</li>
+      <li><b>3.2</b> · 全站浅色新界面；修复草稿箱因令牌顶替显示为空</li>
+      <li><b>3.0</b> · 内置排版编辑器（工坊同款渲染引擎）</li>
+      <li><b>2.0</b> · 从状态页升级为操作台：建包、上传、草稿管理</li>
+      <li><b>1.0</b> · 初版：网关状态页</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="mut">本应用全部在本机运行：公众号密钥、文章与图片只存在你自己的 NAS 上，不经过任何第三方服务器。</div>
+  </div>
+</div>
+<script>
+fetch('/app/gzhuploader/about.json').then(function (r) { return r.json(); }).then(function (r) {
+  if (!r.ok) return;
+  document.getElementById('v-ver').textContent = 'v' + r.version;
+  document.getElementById('v-env').textContent = r.env || '—';
+  document.getElementById('v-data').textContent = r.data_dir || '—';
+}).catch(function () {});
+</script>
+</body>
+</html>

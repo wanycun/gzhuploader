@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>编辑文章包 · 公众号助手</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#F7F8FA; color:#23272F; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+  .sidebar { position:fixed; left:0; top:0; bottom:0; width:208px; background:#fff; border-right:1px solid #E3E6EA; padding:18px 12px; z-index:50; }
+  .sidebar .logo { font-weight:700; font-size:15px; color:#111827; padding:2px 10px 16px; }
+  .sidebar .logo b { color:#3B5BFD; }
+  .sidebar a { display:block; color:#5B6470; text-decoration:none; font-size:14px; padding:8px 10px; border-radius:8px; margin-bottom:2px; cursor:pointer; }
+  .sidebar a:hover { background:#F0F2F5; color:#111827; }
+  .sidebar a.on { background:#EEF2FF; color:#2F4BE0; font-weight:600; }
+  .wrap { max-width:880px; margin:0 auto; padding:22px 18px 28px; }
+  body { padding-left:208px; }
+  @media (max-width:760px) {
+    .sidebar { position:fixed; left:0; right:0; top:0; bottom:auto; width:auto; height:52px; padding:0 10px; display:flex; align-items:center; gap:2px; border-right:none; border-bottom:1px solid #E3E6EA; overflow-x:auto; }
+    .sidebar .logo { display:none !important; }
+    .sidebar a { display:inline-block; margin:0; padding:6px 9px; white-space:nowrap; }
+    body { padding-left:0; padding-top:52px; }
+    .wrap { padding:16px 12px 28px; }
+    
+    .row { flex-wrap:wrap; }
+    h1 { font-size:18px; }
+  }
+  h1 { font-size:20px; margin:2px 0 4px; color:#111827; }
+  .sub { color:#666E7A; font-size:13px; margin-bottom:18px; line-height:1.7; }
+  .card { background:#fff; border:1px solid #E3E6EA; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .card h2 { font-size:13px; margin:0 0 12px; color:#666E7A; font-weight:600; letter-spacing:.04em; }
+  label { display:block; font-size:13px; color:#666E7A; margin:14px 0 6px; }
+  label:first-of-type { margin-top:0; }
+  input[type=text], input[type=password], textarea { width:100%; background:#fff; border:1px solid #D3D8DE; color:#23272F; border-radius:8px; padding:9px 10px; font-size:14px; font-family:inherit; }
+  textarea { line-height:1.7; resize:vertical; }
+  button { background:#fff; color:#23272F; border:1px solid #D3D8DE; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button:hover { background:#F0F2F5; }
+  button.pri { background:#3B5BFD; border-color:#3B5BFD; color:#fff; }
+  button.pri:hover { background:#2F4BE0; }
+  button.danger { color:#E02424; border-color:#F3C2C2; }
+  button.small { padding:4px 10px; font-size:12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EFF1F4; }
+  .row:last-child { border-bottom:none; }
+  .tag { font-size:12px; color:#666E7A; }
+  .ok { color:#0E9F6E; } .bad { color:#E02424; }
+  .mut { color:#666E7A; font-size:13px; line-height:1.7; }
+  .warn { color:#B45309; font-size:13px; line-height:1.7; }
+  .hint { font-size:12px; color:#98A1AC; margin-top:5px; line-height:1.6; }
+  .state { font-size:12px; margin-left:8px; }
+  .msg { font-size:13px; }
+  .bottombar { margin-top:18px; padding-top:16px; border-top:1px solid #E3E6EA; }
+  .bottombar .in { max-width:880px; margin:0 auto; padding:12px 18px; display:flex; gap:8px; align-items:center; }
+  
+  .msgbar { font-size:13px; margin-top:8px; min-height:18px; white-space:pre-wrap; }
+
+  .sidebar .logo { display:flex; align-items:center; gap:8px; }
+  .lg-ic { background:#3B5BFD; color:#fff; border-radius:7px; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex:none; }
+  #runs div, #state { overflow-wrap:anywhere; }
+</style>
+</head>
+<body>
+<div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a href="/app/gzhuploader/packages">文章包</a><a class="on" href="javascript:void(0)">编辑</a><a href="#" id="tb-typeset">排版</a><a href="/app/gzhuploader/generate">文案生成</a><a href="/app/gzhuploader/drafts">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a href="/app/gzhuploader/settings">设置</a><a href="/app/gzhuploader/about">关于</a></div>
+<div class="wrap">
+  <h1 id="pkg-name">编辑</h1>
+
+  <div class="card">
+    <h2>文章信息</h2>
+    <label>标题</label>
+    <input type="text" id="f-title">
+    <label>副标题（摘要）</label>
+    <input type="text" id="f-digest">
+    <div class="hint" style="margin-top:12px">正文与配图在排版页修改：点右上角「排版」，用「编辑文字 / 图片」。</div>
+  </div>
+
+  <div class="card">
+    <h2>封面</h2>
+    <div class="mut" id="cover-state">—</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button id="btn-cover">上传封面图</button>
+      <button id="btn-default-cover">生成默认封面</button>
+      <input type="file" id="cover-file" accept="image/*" style="display:none">
+    </div>
+  </div>
+
+  <div class="card" id="content-note" style="display:none">
+    <h2>排版稿</h2>
+    <div class="warn">这个包有排版稿（content.html），上传时以排版稿为准，正文改动请在排版页用「编辑文字 / 图片」完成；若删掉排版稿，上传将改用原始 Markdown 正文，排版页的修改不再生效。</div>
+    <div style="margin-top:10px"><button class="danger" id="btn-content">删除排版稿</button></div>
+  </div>
+</div>
+
+<div class="bottombar"><div class="in">
+  <button class="pri" id="btn-save" style="padding:9px 22px;font-size:14px">保存修改</button>
+  <button id="btn-preview">预览</button>
+  <span class="msg" id="msg"></span>
+</div></div>
+
+<script>
+const BASE = '/app/gzhuploader';
+const $ = id => document.getElementById(id);
+const name = new URLSearchParams(location.search).get('name') || '';
+const msg = (t, ok) => { const m = $('msg'); m.textContent = t; m.style.color = ok === false ? '#E02424' : '#0E9F6E'; };
+$('tb-typeset').onclick = () => { location.href = BASE + '/typeset?name=' + encodeURIComponent(name); };
+$('pkg-name').textContent = '编辑 · ' + name;
+
+async function load() {
+  const r = await (await fetch(BASE + '/job?name=' + encodeURIComponent(name))).json();
+  if (!r.ok) { msg('读取失败：' + (r.error || ''), false); return; }
+  $('f-title').value = (r.meta && r.meta.title) || '';
+  $('f-digest').value = (r.meta && r.meta.digest) || '';
+  $('cover-state').textContent = r.has_cover ? '已有封面 cover.png' : '还没有封面，上传时公众号会缺封面图';
+  if (r.has_content_html) $('content-note').style.display = '';
+}
+load();
+
+$('btn-save').onclick = async () => {
+  $('btn-save').disabled = true; msg('保存中…');
+  const r = await (await fetch(BASE + '/save-job', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, title: $('f-title').value, digest: $('f-digest').value})})).json();
+  msg(r.ok ? '已保存' : '保存失败：' + (r.error || ''), r.ok);
+  $('btn-save').disabled = false;
+};
+$('btn-preview').onclick = () => { window.open(BASE + '/preview?name=' + encodeURIComponent(name), '_blank'); };
+$('btn-content').onclick = async () => {
+  if (!confirm('删除排版稿？之后上传将用 Markdown 正文。')) return;
+  const r = await (await fetch(BASE + '/drop-content', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})})).json();
+  if (r.ok) { $('content-note').style.display = 'none'; msg('排版稿已删除'); } else msg('删除失败', false);
+};
+$('btn-cover').onclick = () => $('cover-file').click();
+$('cover-file').onchange = async () => {
+  const f = $('cover-file').files[0]; if (!f) return;
+  const buf = await f.arrayBuffer();
+  let bin = ''; const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  const r = await (await fetch(BASE + '/job-file', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, filename: 'cover' + (f.name.match(/\.[a-z0-9]+$/i) || ['.png'])[0], data: btoa(bin)})})).json();
+  msg(r.ok ? '封面已更新' : '封面上传失败：' + (r.error || ''), r.ok);
+  if (r.ok) $('cover-state').textContent = '已有封面 cover.png';
+};
+$('btn-default-cover').onclick = async () => {
+  const r = await (await fetch(BASE + '/default-cover', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, title: $('f-title').value || name})})).json();
+  msg(r.ok ? '默认封面已生成' : '生成失败：' + (r.error || ''), r.ok);
+  if (r.ok) $('cover-state').textContent = '已有封面 cover.png（默认封面）';
+};
+</script>
+</body>
+</html>

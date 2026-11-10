@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文章包 · 公众号助手</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#F7F8FA; color:#23272F; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+  .sidebar { position:fixed; left:0; top:0; bottom:0; width:208px; background:#fff; border-right:1px solid #E3E6EA; padding:18px 12px; z-index:50; }
+  .sidebar .logo { font-weight:700; font-size:15px; color:#111827; padding:2px 10px 16px; }
+  .sidebar .logo b { color:#3B5BFD; }
+  .sidebar a { display:block; color:#5B6470; text-decoration:none; font-size:14px; padding:8px 10px; border-radius:8px; margin-bottom:2px; cursor:pointer; }
+  .sidebar a:hover { background:#F0F2F5; color:#111827; }
+  .sidebar a.on { background:#EEF2FF; color:#2F4BE0; font-weight:600; }
+  .wrap { max-width:880px; margin:0 auto; padding:22px 18px 110px; }
+  body { padding-left:208px; }
+  @media (max-width:760px) {
+    .sidebar { position:fixed; left:0; right:0; top:0; bottom:auto; width:auto; height:52px; padding:0 10px; display:flex; align-items:center; gap:2px; border-right:none; border-bottom:1px solid #E3E6EA; overflow-x:auto; }
+    .sidebar .logo { display:none !important; }
+    .sidebar a { display:inline-block; margin:0; padding:6px 9px; white-space:nowrap; }
+    body { padding-left:0; padding-top:52px; }
+    .wrap { padding:16px 12px 100px; }
+    .bottombar { left:0; }
+    .row { flex-wrap:wrap; }
+    h1 { font-size:18px; }
+  }
+  h1 { font-size:20px; margin:2px 0 4px; color:#111827; }
+  .sub { color:#666E7A; font-size:13px; margin-bottom:18px; line-height:1.7; }
+  .card { background:#fff; border:1px solid #E3E6EA; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .card h2 { font-size:13px; margin:0 0 12px; color:#666E7A; font-weight:600; letter-spacing:.04em; }
+  label { display:block; font-size:13px; color:#666E7A; margin:14px 0 6px; }
+  label:first-of-type { margin-top:0; }
+  input[type=text], input[type=password], textarea { width:100%; background:#fff; border:1px solid #D3D8DE; color:#23272F; border-radius:8px; padding:9px 10px; font-size:14px; font-family:inherit; }
+  textarea { line-height:1.7; resize:vertical; }
+  button { background:#fff; color:#23272F; border:1px solid #D3D8DE; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button:hover { background:#F0F2F5; }
+  button.pri { background:#3B5BFD; border-color:#3B5BFD; color:#fff; }
+  button.pri:hover { background:#2F4BE0; }
+  button.danger { color:#E02424; border-color:#F3C2C2; }
+  button.small { padding:4px 10px; font-size:12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EFF1F4; }
+  .row:last-child { border-bottom:none; }
+  .tag { font-size:12px; color:#666E7A; }
+  .ok { color:#0E9F6E; } .bad { color:#E02424; }
+  .mut { color:#666E7A; font-size:13px; line-height:1.7; }
+  .warn { color:#B45309; font-size:13px; line-height:1.7; }
+  .hint { font-size:12px; color:#98A1AC; margin-top:5px; line-height:1.6; }
+  .state { font-size:12px; margin-left:8px; }
+  .msg { font-size:13px; }
+  .bottombar { position:fixed; left:208px; right:0; bottom:0; z-index:60; background:#fff; border-top:1px solid #E3E6EA; box-shadow:0 -4px 16px rgba(16,24,40,.06); }
+  .bottombar .in { max-width:880px; margin:0 auto; padding:12px 18px; display:flex; gap:8px; align-items:center; }
+  
+  .msgbar { font-size:13px; margin-top:8px; min-height:18px; white-space:pre-wrap; }
+
+  .sidebar .logo { display:flex; align-items:center; gap:8px; }
+  .lg-ic { background:#3B5BFD; color:#fff; border-radius:7px; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex:none; }
+  #runs div, #state { overflow-wrap:anywhere; }
+</style>
+</head>
+<body>
+<div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a class="on" href="javascript:void(0)">文章包</a><a href="/app/gzhuploader/generate">文案生成</a><a href="/app/gzhuploader/drafts">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a href="/app/gzhuploader/settings">设置</a><a href="/app/gzhuploader/about">关于</a></div>
+<div class="wrap">
+  <h1>文章包</h1>
+  <div class="sub">文章从 NAS 本地推入微信公众号草稿箱。点文章包右侧按钮编辑、排版或上传。</div>
+
+  <div class="card">
+    <h2>文章包（点上传进草稿箱）</h2>
+    <div id="jobs" class="mut">加载中…</div>
+  </div>
+  <div class="msgbar" id="msg"></div>
+</div>
+<script>
+const BASE = '/app/gzhuploader';
+const $ = id => document.getElementById(id);
+const msg = (t, ok) => { const m = $('msg'); m.textContent = t; m.style.color = ok === false ? '#E02424' : '#0E9F6E'; };
+
+async function loadJobs() {
+  try {
+    const r = await (await fetch(BASE + '/state.json')).json();
+    $('jobs').innerHTML = r.jobs.length ? '' : '还没有文章包。在 NAS 的 jobs 目录放包，或用左侧「文案生成」。';
+    r.jobs.forEach(j => {
+      if (typeof j === 'string') j = {name: j, files: 0, has_cover: false, has_content_html: false};
+      const row = document.createElement('div'); row.className = 'row';
+      const left = document.createElement('div');
+      left.innerHTML = '<div>' + j.name + '</div><div class="tag">' + j.files + ' 个文件' +
+        (j.has_content_html ? ' · 有排版稿' : '') + (j.has_cover ? ' · 有封面' : ' · 缺封面') + '</div>';
+      const right = document.createElement('div'); right.style.display = 'flex'; right.style.gap = '6px';
+      const bE = document.createElement('button'); bE.className = 'small'; bE.textContent = '编辑';
+      bE.onclick = () => { location.href = BASE + '/editor?name=' + encodeURIComponent(j.name); };
+      const bT = document.createElement('button'); bT.className = 'small'; bT.textContent = '排版';
+      bT.onclick = () => { location.href = BASE + '/typeset?name=' + encodeURIComponent(j.name); };
+      const bU = document.createElement('button'); bU.className = 'small pri'; bU.textContent = '上传';
+      bU.onclick = () => uploadJob(j.name, bU);
+      const bP = document.createElement('button'); bP.className = 'small'; bP.textContent = '预览';
+      bP.onclick = () => { window.open(BASE + '/preview?name=' + encodeURIComponent(j.name), '_blank'); };
+      const bD = document.createElement('button'); bD.className = 'small danger'; bD.textContent = '删包';
+      bD.onclick = () => deleteJob(j.name);
+      right.append(bE, bT, bU, bP, bD);
+      row.append(left, right); $('jobs').appendChild(row);
+    });
+  } catch (e) { $('jobs').textContent = '读取失败：' + e; }
+}
+
+async function uploadJob(name, btn) {
+  btn.disabled = true; btn.textContent = '上传中…'; msg('正在把「' + name + '」推入草稿箱…');
+  try {
+    const r = await (await fetch(BASE + '/upload', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})})).json();
+    if (r.ok) msg('「' + name + '」已进草稿箱，在左侧「草稿箱」里查看');
+    else msg('上传失败[' + (r.stage || '') + ']：' + (r.error || '') + (r.egress_ip ? '（出口 ' + r.egress_ip + '）' : ''), false);
+  } catch (e) { msg('上传失败：' + e, false); }
+  btn.disabled = false; btn.textContent = '上传';
+}
+
+async function deleteJob(name) {
+  if (!confirm('删除文章包「' + name + '」？包内文件会一并删除。')) return;
+  const r = await (await fetch(BASE + '/delete-job', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})})).json();
+  msg(r.ok ? '已删除文章包 ' + name : '删除失败：' + (r.error || ''), r.ok);
+  loadJobs();
+}
+loadJobs();
+</script>
+</body>
+</html>

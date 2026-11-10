@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 接入说明 · 公众号助手</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#F7F8FA; color:#23272F; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+  .sidebar { position:fixed; left:0; top:0; bottom:0; width:208px; background:#fff; border-right:1px solid #E3E6EA; padding:18px 12px; z-index:50; }
+  .sidebar .logo { font-weight:700; font-size:15px; color:#111827; padding:2px 10px 16px; }
+  .sidebar .logo b { color:#3B5BFD; }
+  .sidebar a { display:block; color:#5B6470; text-decoration:none; font-size:14px; padding:8px 10px; border-radius:8px; margin-bottom:2px; cursor:pointer; }
+  .sidebar a:hover { background:#F0F2F5; color:#111827; }
+  .sidebar a.on { background:#EEF2FF; color:#2F4BE0; font-weight:600; }
+  .wrap { max-width:880px; margin:0 auto; padding:22px 18px 110px; }
+  body { padding-left:208px; }
+  @media (max-width:760px) {
+    .sidebar { position:fixed; left:0; right:0; top:0; bottom:auto; width:auto; height:52px; padding:0 10px; display:flex; align-items:center; gap:2px; border-right:none; border-bottom:1px solid #E3E6EA; overflow-x:auto; }
+    .sidebar .logo { display:none !important; }
+    .sidebar a { display:inline-block; margin:0; padding:6px 9px; white-space:nowrap; }
+    body { padding-left:0; padding-top:52px; }
+    .wrap { padding:16px 12px 100px; }
+    .bottombar { left:0; }
+    .row { flex-wrap:wrap; }
+    h1 { font-size:18px; }
+  }
+  h1 { font-size:20px; margin:2px 0 4px; color:#111827; }
+  .sub { color:#666E7A; font-size:13px; margin-bottom:18px; line-height:1.7; }
+  .card { background:#fff; border:1px solid #E3E6EA; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .card h2 { font-size:13px; margin:0 0 12px; color:#666E7A; font-weight:600; letter-spacing:.04em; }
+  label { display:block; font-size:13px; color:#666E7A; margin:14px 0 6px; }
+  label:first-of-type { margin-top:0; }
+  input[type=text], input[type=password], textarea { width:100%; background:#fff; border:1px solid #D3D8DE; color:#23272F; border-radius:8px; padding:9px 10px; font-size:14px; font-family:inherit; }
+  textarea { line-height:1.7; resize:vertical; }
+  button { background:#fff; color:#23272F; border:1px solid #D3D8DE; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button:hover { background:#F0F2F5; }
+  button.pri { background:#3B5BFD; border-color:#3B5BFD; color:#fff; }
+  button.pri:hover { background:#2F4BE0; }
+  button.danger { color:#E02424; border-color:#F3C2C2; }
+  button.small { padding:4px 10px; font-size:12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EFF1F4; }
+  .row:last-child { border-bottom:none; }
+  .tag { font-size:12px; color:#666E7A; }
+  .ok { color:#0E9F6E; } .bad { color:#E02424; }
+  .mut { color:#666E7A; font-size:13px; line-height:1.7; }
+  .warn { color:#B45309; font-size:13px; line-height:1.7; }
+  .hint { font-size:12px; color:#98A1AC; margin-top:5px; line-height:1.6; }
+  .state { font-size:12px; margin-left:8px; }
+  .msg { font-size:13px; }
+  .bottombar { position:fixed; left:208px; right:0; bottom:0; z-index:60; background:#fff; border-top:1px solid #E3E6EA; box-shadow:0 -4px 16px rgba(16,24,40,.06); }
+  .bottombar .in { max-width:880px; margin:0 auto; padding:12px 18px; display:flex; gap:8px; align-items:center; }
+  
+  .msgbar { font-size:13px; margin-top:8px; min-height:18px; white-space:pre-wrap; }
+
+  .sidebar .logo { display:flex; align-items:center; gap:8px; }
+  .lg-ic { background:#3B5BFD; color:#fff; border-radius:7px; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex:none; }
+  #runs div, #state { overflow-wrap:anywhere; }
+  code { background:#F0F2F5; padding:1px 6px; border-radius:6px; font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a href="/app/gzhuploader/packages">文章包</a><a href="/app/gzhuploader/generate">文案生成</a><a href="/app/gzhuploader/drafts">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a class="on" href="javascript:void(0)">设置</a><a href="/app/gzhuploader/about">关于</a></div>
+<div class="wrap">
+<h1>AI 接入说明</h1>
+<div class="card">
+<div style="font-weight:700;font-size:15px;margin-bottom:6px">接入方式</div>
+<div class="mut">两个入口,路径相同,任选其一:</div>
+<div style="margin:8px 0"><code>http://&lt;NAS 局域网 IP&gt;:10039/api/v1</code> 局域网直连</div>
+<div style="margin:8px 0"><code>https://&lt;你的飞牛网关地址&gt;/app/gzhuploader/api/v1</code> 经网关(需先登录飞牛)</div>
+<div class="mut">鉴权:每个请求带请求头 <code>Authorization: Bearer &lt;令牌&gt;</code>(或 <code>X-Api-Token: &lt;令牌&gt;</code>)。令牌在「设置」页生成,只显示一次。未生成令牌时接口返回 403,令牌不对返回 401。所有响应都是 JSON,失败形如 {"ok":false,"error":"原因"}。</div>
+</div>
+<div class="card">
+<div style="font-weight:700;font-size:15px;margin-bottom:8px">端点</div>
+<div class="mut" style="line-height:2">
+GET /status — 配置状态、出口 IP、草稿数、文章包列表<br>
+GET /packages — 文章包列表<br>
+GET /packages/{name} — 包详情(全文、元信息、spec)<br>
+POST /packages — 建包(见下方示例)<br>
+POST /packages/{name}/typeset — 生成排版 content.html(可带 spec)<br>
+POST /packages/{name}/upload — 推入公众号草稿箱<br>
+DELETE /packages/{name} — 删除文章包<br>
+GET /drafts — 草稿箱列表<br>
+POST /drafts/{media_id}/delete — 删除一篇草稿<br>
+GET /logs — 最近运行记录
+</div>
+</div>
+<div class="card">
+<div style="font-weight:700;font-size:15px;margin-bottom:6px">建包示例</div>
+<pre style="background:#F7F8FA;border:1px solid #E3E6EA;border-radius:10px;padding:12px;overflow-x:auto;font-size:12.5px">curl -X POST $BASE/packages -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{
+  "name": "my-post",
+  "title": "文章标题",
+  "digest": "一句话摘要",
+  "md": "正文 Markdown,图片用相对文件名如 ![](a.png)",
+  "spec": {"theme": "electric-blueprint"},
+  "files": [{"filename": "cover.png", "data_base64": "&lt;图片的 base64&gt;"},
+            {"filename": "a.png", "data_base64": "&lt;图片的 base64&gt;"}]
+}'</pre>
+<div class="mut">随后依次调 typeset、upload 两步即可进草稿箱。包名只用字母数字与 . _ -;包已存在需传 "overwrite": true。upload 会真实创建草稿。</div>
+</div>
+<div class="card">
+<div style="font-weight:700;font-size:15px;margin-bottom:6px">给 AI 的 Skill 描述(整段复制给你的 AI)</div>
+<textarea readonly rows="14" style="width:100%;box-sizing:border-box;border:1px solid #E3E6EA;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.7;background:#F7F8FA"># Skill:公众号助手(gzhuploader)接入
+用途:把 Markdown 文章经用户 NAS 上的「公众号助手」排版并推入微信公众号草稿箱。
+连接:BASE = http://&lt;NAS 局域网 IP&gt;:10039/api/v1;每个请求带请求头 Authorization: Bearer &lt;TOKEN&gt;(令牌在应用设置页生成,向用户索取,不要写进代码仓库或公开文件)。
+标准流程:
+1) POST /packages 建包:{"name":"my-post","title":"标题","digest":"摘要","md":"正文 Markdown","files":[{"filename":"cover.png","data_base64":"..."}]};封面文件名默认 cover.png,正文图片同样放 files 并在 md 里以相对文件名引用。
+2) POST /packages/{name}/typeset 生成排版(可带 spec 规格对象,不带则按 md 的 ## 分节自动排版)。
+3) POST /packages/{name}/upload 推入公众号草稿箱,返回 draft_media_id。upload 会真实创建草稿,执行前必须先向用户确认。
+查询:GET /status(状态与出口 IP)、GET /packages、GET /packages/{name}(含全文与 spec)、GET /drafts、GET /logs;删除:DELETE /packages/{name}、POST /drafts/{media_id}/delete。
+约束:包名只用字母数字与 . _ -;包已存在时建包需传 overwrite=true;所有响应为 JSON,失败为 {"ok":false,"error":"原因"};常见错误 40164=出口 IP 未加公众号白名单,让用户去公众号后台添加(出口 IP 见 /status)。</textarea>
+</div>
+<div class="card">
+<div style="font-weight:700;font-size:15px;margin-bottom:6px">文件夹契约(备选)</div>
+<div class="mut">能直接访问 NAS 文件的 AI 也可以不走接口:把文章包文件夹放进应用数据目录的 gzh-data/jobs/ 下(包内 article.md + cover.png + 配图,格式见《使用说明》),应用里立刻可见。</div>
+</div>
+</div>
+</body></html>

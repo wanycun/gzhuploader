@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>草稿箱 · 公众号助手</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#F7F8FA; color:#23272F; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+  .sidebar { position:fixed; left:0; top:0; bottom:0; width:208px; background:#fff; border-right:1px solid #E3E6EA; padding:18px 12px; z-index:50; }
+  .sidebar .logo { font-weight:700; font-size:15px; color:#111827; padding:2px 10px 16px; }
+  .sidebar .logo b { color:#3B5BFD; }
+  .sidebar a { display:block; color:#5B6470; text-decoration:none; font-size:14px; padding:8px 10px; border-radius:8px; margin-bottom:2px; cursor:pointer; }
+  .sidebar a:hover { background:#F0F2F5; color:#111827; }
+  .sidebar a.on { background:#EEF2FF; color:#2F4BE0; font-weight:600; }
+  .wrap { max-width:880px; margin:0 auto; padding:22px 18px 110px; }
+  body { padding-left:208px; }
+  @media (max-width:760px) {
+    .sidebar { position:fixed; left:0; right:0; top:0; bottom:auto; width:auto; height:52px; padding:0 10px; display:flex; align-items:center; gap:2px; border-right:none; border-bottom:1px solid #E3E6EA; overflow-x:auto; }
+    .sidebar .logo { display:none !important; }
+    .sidebar a { display:inline-block; margin:0; padding:6px 9px; white-space:nowrap; }
+    body { padding-left:0; padding-top:52px; }
+    .wrap { padding:16px 12px 100px; }
+    .bottombar { left:0; }
+    .row { flex-wrap:wrap; }
+    h1 { font-size:18px; }
+  }
+  h1 { font-size:20px; margin:2px 0 4px; color:#111827; }
+  .sub { color:#666E7A; font-size:13px; margin-bottom:18px; line-height:1.7; }
+  .card { background:#fff; border:1px solid #E3E6EA; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .card h2 { font-size:13px; margin:0 0 12px; color:#666E7A; font-weight:600; letter-spacing:.04em; }
+  label { display:block; font-size:13px; color:#666E7A; margin:14px 0 6px; }
+  label:first-of-type { margin-top:0; }
+  input[type=text], input[type=password], textarea { width:100%; background:#fff; border:1px solid #D3D8DE; color:#23272F; border-radius:8px; padding:9px 10px; font-size:14px; font-family:inherit; }
+  textarea { line-height:1.7; resize:vertical; }
+  button { background:#fff; color:#23272F; border:1px solid #D3D8DE; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button:hover { background:#F0F2F5; }
+  button.pri { background:#3B5BFD; border-color:#3B5BFD; color:#fff; }
+  button.pri:hover { background:#2F4BE0; }
+  button.danger { color:#E02424; border-color:#F3C2C2; }
+  button.small { padding:4px 10px; font-size:12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EFF1F4; }
+  .row:last-child { border-bottom:none; }
+  .tag { font-size:12px; color:#666E7A; }
+  .ok { color:#0E9F6E; } .bad { color:#E02424; }
+  .mut { color:#666E7A; font-size:13px; line-height:1.7; }
+  .warn { color:#B45309; font-size:13px; line-height:1.7; }
+  .hint { font-size:12px; color:#98A1AC; margin-top:5px; line-height:1.6; }
+  .state { font-size:12px; margin-left:8px; }
+  .msg { font-size:13px; }
+  .bottombar { position:fixed; left:208px; right:0; bottom:0; z-index:60; background:#fff; border-top:1px solid #E3E6EA; box-shadow:0 -4px 16px rgba(16,24,40,.06); }
+  .bottombar .in { max-width:880px; margin:0 auto; padding:12px 18px; display:flex; gap:8px; align-items:center; }
+  
+  .msgbar { font-size:13px; margin-top:8px; min-height:18px; white-space:pre-wrap; }
+
+  .sidebar .logo { display:flex; align-items:center; gap:8px; }
+  .lg-ic { background:#3B5BFD; color:#fff; border-radius:7px; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex:none; }
+  #runs div, #state { overflow-wrap:anywhere; }
+</style>
+</head>
+<body>
+<div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a href="/app/gzhuploader/packages">文章包</a><a href="/app/gzhuploader/generate">文案生成</a><a class="on" href="javascript:void(0)">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a href="/app/gzhuploader/settings">设置</a><a href="/app/gzhuploader/about">关于</a></div>
+<div class="wrap">
+  <h1>草稿箱</h1>
+  <div class="sub">微信公众号草稿箱里的文章（最多显示最近 20 篇）。发布请去公众号后台操作。</div>
+  <div class="card">
+    <h2>草稿列表</h2>
+    <div id="drafts" class="mut">加载中…</div>
+    <div style="margin-top:10px"><button class="small" id="btn-refresh">刷新</button></div>
+  </div>
+  <div class="msgbar" id="msg"></div>
+</div>
+<script>
+const BASE = '/app/gzhuploader';
+const $ = id => document.getElementById(id);
+const msg = (t, ok) => { const m = $('msg'); m.textContent = t; m.style.color = ok === false ? '#E02424' : '#0E9F6E'; };
+
+async function loadDrafts() {
+  $('drafts').textContent = '加载中…';
+  try {
+    const r = await (await fetch(BASE + '/drafts.json')).json();
+    if (!r.ok) { $('drafts').textContent = '读取失败：' + (r.error || ''); return; }
+    const box = $('drafts'); box.innerHTML = r.items.length ? '' : '草稿箱是空的';
+    r.items.forEach(d => {
+      const row = document.createElement('div'); row.className = 'row';
+      const left = document.createElement('div');
+      left.innerHTML = '<div>' + (d.title || '(无标题)').replace(/</g, '&lt;') + '</div><div class="tag">' +
+        new Date((d.update_time || 0) * 1000).toLocaleString('zh-CN') + '</div>';
+      const b = document.createElement('button'); b.className = 'small danger'; b.textContent = '删除';
+      b.onclick = async () => {
+        if (!confirm('删除这篇草稿？')) return;
+        const rr = await (await fetch(BASE + '/delete-draft', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({media_id: d.media_id})})).json();
+        msg(rr.ok ? '草稿已删除' : '删除失败', rr.ok); loadDrafts();
+      };
+      row.append(left, b); box.appendChild(row);
+    });
+  } catch (e) { $('drafts').textContent = '读取失败：' + e; }
+}
+$('btn-refresh').onclick = loadDrafts;
+loadDrafts();
+</script>
+</body>
+</html>
