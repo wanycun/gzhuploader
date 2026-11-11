@@ -77,7 +77,7 @@
   </div>
 
   <div class="card">
-    <h2>AI（文案生成 + 封面绘图）</h2>
+    <h2>AI（文案生成 + 封面/配图绘图）</h2>
     <label>服务商</label>
     <select id="f-provider">
       <option value="deepseek">DeepSeek</option>
@@ -95,10 +95,13 @@
     <input type="password" id="f-dskey" placeholder="留空不修改">
     <label>文案模型</label>
     <input type="text" id="f-model">
-    <label>绘图模型（封面，可留空）</label>
+    <label>绘图模型（封面与正文配图，可留空）</label>
     <input type="text" id="f-draw" placeholder="如 gpt-image-1 / Kwai-Kolors/Kolors；留空则用程序绘制的默认封面">
     <label>封面提示词（{title} 会替换成文章标题）</label>
     <textarea id="f-prompt" rows="3"></textarea>
+    <label>正文配图提示词（{title} 文章标题、{topic} 小节标题）</label>
+    <textarea id="f-bprompt" rows="3"></textarea>
+    <div class="hint">文案生成时按小节生成 2–3 张正文配图：填了绘图模型先调模型出图，失败或没填时自动用程序绘制的电蓝图示意图兜底。</div>
     <div class="hint">填了绘图模型时，「默认封面」按钮与文案生成会先调模型出图，失败自动回退到程序绘制的电蓝图封面；没填绘图模型就一直用程序绘制。</div>
   </div>
 
@@ -138,6 +141,7 @@ async function load() {
   $('f-model').value = r.ai_model || 'deepseek-chat';
   $('f-draw').value = r.ai_draw_model || '';
   $('f-prompt').value = r.cover_prompt || '';
+  $('f-bprompt').value = r.body_prompt || '';
   $('f-author').value = r.author || '';
   $('f-label').value = r.label || '';
   $('f-intro').value = r.intro || '';
@@ -167,7 +171,7 @@ $('btn-save').onclick = async () => {
   const body = { wx_appid: $('f-appid').value, ds_model: $('f-model').value,
     author: $('f-author').value, label: $('f-label').value, intro: $('f-intro').value,
     ai_provider: $('f-provider').value, ai_base_url: $('f-base').value,
-    ai_model: $('f-model').value, ai_draw_model: $('f-draw').value, cover_prompt: $('f-prompt').value };
+    ai_model: $('f-model').value, ai_draw_model: $('f-draw').value, cover_prompt: $('f-prompt').value, body_prompt: $('f-bprompt').value };
   if ($('f-secret').value) body.wx_secret = $('f-secret').value;
   if ($('f-dskey').value) { body.ds_key = $('f-dskey').value; body.ai_key = $('f-dskey').value; }
   const r = await (await fetch(BASE + '/settings-save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})).json();

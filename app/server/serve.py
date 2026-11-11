@@ -18,7 +18,7 @@ from socketserver import UnixStreamServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 TARGET = os.path.dirname(HERE)
 WWW = os.path.join(TARGET, 'www')
-APP_VERSION = '3.13.0'
+APP_VERSION = '3.14.0'
 SOCK = os.path.join(TARGET, 'app.sock')
 PREFIX = '/app/gzhuploader'
 API = 'https://api.weixin.qq.com'
@@ -101,6 +101,9 @@ AI_PRESETS = {
 }
 DEFAULT_COVER_PROMPT = '为公众号文章《{title}》画一张封面插图：electric blueprint 电蓝图风，粗线条，高亮的白色与青色线稿，深蓝图纸底，主体醒目、充满画面，不要出现任何文字。'
 
+DEFAULT_BODY_PROMPT = '为公众号文章《{title}》的正文小节「{topic}」画一张配图：electric blueprint 电蓝图风，粗线条，高亮的白色与青色线稿，深蓝图纸底，画面简洁、与小节内容相关，不要出现任何文字。'
+BODY_IMG_W = 1354
+
 
 def ai_conf(st):
     prov = st.get('ai_provider') or 'deepseek'
@@ -110,7 +113,8 @@ def ai_conf(st):
             'key': (st.get('ai_key') or '').strip(),
             'model': st.get('ai_model') or preset[2],
             'draw_model': (st.get('ai_draw_model') or '').strip(),
-            'cover_prompt': st.get('cover_prompt') or DEFAULT_COVER_PROMPT}
+            'cover_prompt': st.get('cover_prompt') or DEFAULT_COVER_PROMPT,
+            'body_prompt': st.get('body_prompt') or DEFAULT_BODY_PROMPT}
 
 
 def ai_post(conf, path, payload, timeout=150):
@@ -223,12 +227,11 @@ def save_cover_image(pdir, data):
     write_png(os.path.join(pdir, 'cover.png'), TW, TH, pixel)
 
 
-def ai_cover(pdir, title, conf):
+def ai_image_raw(conf, prompt):
     if not conf['draw_model']:
-        return False
+        return None
     if not conf['key'] and conf['provider'] != 'ollama':
-        return False
-    prompt = conf['cover_prompt'].replace('{title}', title or '')
+        return None
     payload = {'model': conf['draw_model'], 'prompt': prompt,
                'response_format': 'b64_json'}
     try:
@@ -246,10 +249,16 @@ def ai_cover(pdir, title, conf):
     elif item.get('url'):
         raw = urllib.request.urlopen(item['url'], timeout=60).read()
     if not raw or raw[:4] != b'\x89PNG':
+        return None
+    return raw
+
+
+def ai_cover(pdir, title, conf):
+    raw = ai_image_raw(conf, conf['cover_prompt'].replace('{title}', title or ''))
+    if not raw:
         return False
     save_cover_image(pdir, raw)
     return True
-
 
 def make_cover(pdir, title):
     conf = ai_conf(load_settings())
@@ -260,6 +269,124 @@ def make_cover(pdir, title):
         log_run('ai-cover failed: %s' % str(e)[:150])
     default_cover(pdir)
     return 'python'
+
+
+def save_scaled_image(pdir, fname, data, tw):
+    w, h, rows = read_png_rgb(data)
+    th = max(1, int(h * tw / w))
+    def pixel(x, y):
+        return rows[min(h - 1, y * h // th)][min(w - 1, x * w // tw)]
+    write_png(os.path.join(pdir, fname), tw, th, pixel)
+
+
+def program_body_image(pdir, fname, idx):
+    # pure-python blueprint diagram, shapes only (no text, no wrong characters)
+    W, H = 1354, 760
+    bg = (10, 42, 94)
+    grid = (23, 66, 128)
+    white = (234, 244, 255)
+    cyan = (64, 196, 240)
+    v = idx % 3
+
+    def ring(x, y, cx, cy, r, t):
+        d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy)
+        return abs(d2 - r * r) < r * t
+
+    def pixel(x, y):
+        c = grid if (x % 60 == 0 or y % 60 == 0) else bg
+        if abs(x - 30) < 3 or abs(x - (W - 31)) < 3 or abs(y - 30) < 3 or abs(y - (H - 31)) < 3:
+            c = white
+        if v == 0:
+            boxes = [(130, 430), (512, 812), (894, 1194)]
+            for (x0, x1) in boxes:
+                if x0 <= x <= x1 and (abs(y - 300) < 4 or abs(y - 460) < 4):
+                    c = white
+                if 300 <= y <= 460 and (abs(x - x0) < 4 or abs(x - x1) < 4):
+                    c = white
+                if x0 <= x <= x1 and 330 <= y <= 430 and (x - x0) % 52 < 3:
+                    c = grid
+            for xe in (512, 894):
+                if xe - 82 < x < xe:
+                    if abs(y - 380) < 4:
+                        c = cyan
+                    if abs(y - 380) < 15 and abs(x - (xe - 16)) < 15 - abs(y - 380):
+                        c = cyan
+        elif v == 1:
+            if ring(x, y, 677, 380, 178, 5):
+                c = white
+            if ring(x, y, 677, 380, 128, 3):
+                c = cyan
+            if (x - 677) * (x - 677) + (y - 380) * (y - 380) < 27 * 27:
+                c = cyan
+            for (sx, sy) in [(252, 182), (1102, 182), (252, 578), (1102, 578)]:
+                if ring(x, y, sx, sy, 46, 6):
+                    c = white
+                if (x - sx) * (x - sx) + (y - sy) * (y - sy) < 10 * 10:
+                    c = cyan
+        else:
+            if 140 <= x <= 1214 and abs(y - 610) < 4:
+                c = white
+            if abs(x - 140) < 4 and 150 <= y <= 610:
+                c = white
+            bars = [(262, 392), (512, 268), (762, 330), (1012, 186)]
+            for (bx, top) in bars:
+                if bx <= x <= bx + 128 and top <= y <= 610:
+                    if abs(x - bx) < 4 or abs(x - (bx + 128)) < 4 or abs(y - top) < 4:
+                        c = white
+                    elif (x + y) % 46 < 3:
+                        c = cyan
+        return c
+    write_png(os.path.join(pdir, fname), W, H, pixel)
+
+
+def make_body_images(pdir, md, conf, title):
+    lines = md.split('\n')
+    sections = [{'topic': title or '', 'first': None}]
+    para_idx = []
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if s.startswith('## ') or s.startswith('# '):
+            sections.append({'topic': s.lstrip('#').strip(), 'first': None})
+            continue
+        if not s or s.startswith('![') or s.startswith('>') or s.startswith('```') or s.startswith('---'):
+            continue
+        para_idx.append(i)
+        if sections[-1]['first'] is None:
+            sections[-1]['first'] = i
+    anchors = [(c['first'], c['topic']) for c in sections if c['first'] is not None]
+    if len(anchors) < 2 and len(para_idx) >= 3:
+        anchors = [(para_idx[0], title or ''),
+                   (para_idx[len(para_idx) // 2], title or ''),
+                   (para_idx[-1], title or '')]
+        anchors = sorted(set(anchors))
+    anchors = anchors[:3]
+    if not anchors:
+        return md, 0
+    tpl = conf.get('body_prompt') or DEFAULT_BODY_PROMPT
+    made = []
+    for n, (li, topic) in enumerate(anchors, 1):
+        fname = 'img-%d.png' % n
+        ok = False
+        try:
+            prompt = tpl.replace('{title}', title or '').replace('{topic}', topic or title or '')
+            raw = ai_image_raw(conf, prompt)
+            if raw:
+                save_scaled_image(pdir, fname, raw, BODY_IMG_W)
+                ok = True
+        except Exception as e:
+            log_run('body-img ai failed: %s' % str(e)[:150])
+        if not ok:
+            try:
+                program_body_image(pdir, fname, n - 1)
+                ok = True
+            except Exception as e:
+                log_run('body-img program failed: %s' % str(e)[:150])
+        if ok:
+            made.append((li, fname))
+    for li, fname in sorted(made, reverse=True):
+        lines.insert(li + 1, '')
+        lines.insert(li + 2, '![](%s)' % fname)
+    return '\n'.join(lines), len(made)
 
 
 def egress_ip():
@@ -536,6 +663,12 @@ def do_generate(topic, notes):
     name = 'gen-' + _t.strftime('%Y%m%d-%H%M%S')
     pdir = os.path.join(data_dir(), 'jobs', name)
     os.makedirs(pdir)
+    try:
+        md, n_img = make_body_images(pdir, md, conf, title)
+        if n_img:
+            log_run('GEN body images: %d (pkg=%s)' % (n_img, name))
+    except Exception as e:
+        log_run('body images failed: %s' % str(e)[:150])
     fm = ('---\ntitle: %s\nauthor: %s\ndigest: %s\ncover: cover.png\n---\n\n%s\n'
           % (title, st.get('author', ''), digest, md))
     with open(os.path.join(pdir, 'article.md'), 'w', encoding='utf-8') as f:
@@ -638,6 +771,7 @@ def load_settings():
         st['ai_model'] = st.get('ds_model', 'deepseek-chat')
     st.setdefault('ai_draw_model', '')
     st.setdefault('cover_prompt', DEFAULT_COVER_PROMPT)
+    st.setdefault('body_prompt', DEFAULT_BODY_PROMPT)
     return st
 
 
@@ -1012,6 +1146,7 @@ class Handler(BaseHTTPRequestHandler):
                                    'ai_model': st.get('ai_model', 'deepseek-chat'),
                                    'ai_draw_model': st.get('ai_draw_model', ''),
                                    'cover_prompt': st.get('cover_prompt', ''),
+                                   'body_prompt': st.get('body_prompt', ''),
                                    'author': st.get('author', ''),
                                    'label': st.get('label', ''),
                                    'intro': st.get('intro', ''),
@@ -1137,13 +1272,14 @@ class Handler(BaseHTTPRequestHandler):
                                    'ai_model': st.get('ai_model', 'deepseek-chat'),
                                    'ai_draw_model': st.get('ai_draw_model', ''),
                                    'cover_prompt': st.get('cover_prompt', ''),
+                                   'body_prompt': st.get('body_prompt', ''),
                                    'author': st.get('author', ''),
                                    'label': st.get('label', ''),
                                    'intro': st.get('intro', ''),
                                    'api_token_set': bool(st.get('api_token'))})
             if path == '/settings-save':
                 st = load_settings()
-                for k in ('wx_appid', 'ds_model', 'author', 'label', 'intro', 'ai_provider', 'ai_base_url', 'ai_model', 'ai_draw_model', 'cover_prompt'):
+                for k in ('wx_appid', 'ds_model', 'author', 'label', 'intro', 'ai_provider', 'ai_base_url', 'ai_model', 'ai_draw_model', 'cover_prompt', 'body_prompt'):
                     if k in data and str(data[k]).strip() != '':
                         st[k] = str(data[k]).strip()
                 if data.get('wx_secret'):

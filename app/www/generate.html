@@ -62,14 +62,14 @@
 <div class="sidebar"><div class="logo"><span class="lg-tx">公众号助手</span></div><a href="/app/gzhuploader/">仪表盘</a><a href="/app/gzhuploader/packages">文章包</a><a class="on" href="javascript:void(0)">文案生成</a><a href="/app/gzhuploader/drafts">草稿箱</a><a href="/app/gzhuploader/logs">运行日志</a><a href="/app/gzhuploader/settings">设置</a><a href="/app/gzhuploader/about">关于</a></div>
 <div class="wrap">
   <h1>文案生成</h1>
-  <div class="sub">输入一个主题，按设置页里的账号口径生成标题与正文，自动建包并打开编辑器。</div>
+  <div class="sub">输入一个主题，按设置页里的账号口径生成标题与正文，自动生成封面与 2–3 张正文配图，自动建包并打开编辑器。</div>
   <div class="card">
     <h2>主题</h2>
     <div style="display:flex;gap:8px">
       <input type="text" id="gen-topic" placeholder="如：我把家里的灯都接入了米家" style="flex:1">
       <button class="pri" id="btn-gen">生成文案</button>
     </div>
-    <div class="hint">生成约需半分钟。需要先在设置页选好 AI 服务商并填密钥（本地 Ollama 可免密钥）。生成的是初稿，数字与事实请在编辑页核对后再上传。</div>
+    <div class="hint">生成约需一分钟（含出图）。需要先在设置页选好 AI 服务商并填密钥（本地 Ollama 可免密钥）。生成的是初稿，数字与事实请在编辑页核对后再上传。</div>
   </div>
   <div class="msgbar" id="msg"></div>
 </div>
