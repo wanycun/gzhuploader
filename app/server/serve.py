@@ -361,18 +361,20 @@ def make_body_images(pdir, md, conf, title):
         anchors = sorted(set(anchors))
     anchors = anchors[:3]
     if not anchors:
-        return md, 0
+        return md, 0, 'none'
     tpl = conf.get('body_prompt') or DEFAULT_BODY_PROMPT
     made = []
     for n, (li, topic) in enumerate(anchors, 1):
         fname = 'img-%d.png' % n
         ok = False
+        img_mode = 'python'
         try:
             prompt = tpl.replace('{title}', title or '').replace('{topic}', topic or title or '')
             raw = ai_image_raw(conf, prompt)
             if raw:
                 save_scaled_image(pdir, fname, raw, BODY_IMG_W)
                 ok = True
+                img_mode = 'ai'
         except Exception as e:
             log_run('body-img ai failed: %s' % str(e)[:150])
         if not ok:
@@ -382,11 +384,140 @@ def make_body_images(pdir, md, conf, title):
             except Exception as e:
                 log_run('body-img program failed: %s' % str(e)[:150])
         if ok:
-            made.append((li, fname))
-    for li, fname in sorted(made, reverse=True):
+            made.append((li, fname, img_mode))
+    for li, fname, _m in sorted(made, reverse=True):
         lines.insert(li + 1, '')
         lines.insert(li + 2, '![](%s)' % fname)
-    return '\n'.join(lines), len(made)
+    modes = [m for _li, _f, m in made]
+    mode = 'ai' if modes and all(m == 'ai' for m in modes) else ('python' if modes and all(m == 'python' for m in modes) else 'mixed')
+    return '\n'.join(lines), len(made), mode
+
+
+def strip_generated_imgs(body):
+    out = []
+    for ln in body.split('\n'):
+        if re.fullmatch(r'!\[[^\]]*\]\(img-\d+\.png\)', ln.strip()):
+            continue
+        out.append(ln)
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(out))
+
+
+def sync_spec_body_images(pdir, fnames):
+    sp_path = os.path.join(pdir, 'spec.json')
+    if not os.path.exists(sp_path):
+        return False
+    try:
+        spec = json.load(open(sp_path, encoding='utf-8'))
+    except Exception:
+        return False
+    placed = 0
+    for sec in spec.get('sections', []):
+        blocks = [b for b in sec.get('blocks', [])
+                  if not (b.get('t') == 'img' and re.fullmatch(r'img-\d+\.png', b.get('src', '')))]
+        if placed < len(fnames):
+            idx = None
+            for i, b in enumerate(blocks):
+                if b.get('t') == 'p':
+                    idx = i
+                    break
+            if idx is None and blocks:
+                idx = 0
+            if idx is not None:
+                blocks.insert(idx + 1, {'t': 'img', 'src': fnames[placed], 'cap': ''})
+                placed += 1
+        sec['blocks'] = blocks
+    if spec.get('sections'):
+        last = spec['sections'][-1]
+        while placed < len(fnames):
+            last.setdefault('blocks', []).append({'t': 'img', 'src': fnames[placed], 'cap': ''})
+            placed += 1
+    with open(sp_path, 'w', encoding='utf-8') as f:
+        json.dump(spec, f, ensure_ascii=False)
+    return True
+
+
+def do_body_images(name):
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', name or ''):
+        return {'ok': False, 'error': 'invalid name'}
+    pdir = os.path.join(data_dir(), 'jobs', name)
+    mp = os.path.join(pdir, 'article.md')
+    if not os.path.exists(mp):
+        return {'ok': False, 'error': 'article.md 不存在'}
+    raw = open(mp, encoding='utf-8').read()
+    meta, body = parse_front_matter(raw)
+    head = ''
+    if raw.startswith('---'):
+        end = raw.find('\n---', 3)
+        if end > 0:
+            head = raw[:end + 4]
+    conf = ai_conf(load_settings())
+    new_body, n, mode = make_body_images(pdir, strip_generated_imgs(body), conf,
+                                         meta.get('title', ''))
+    if not n:
+        return {'ok': False, 'error': '正文太短，没找到可配图的位置'}
+    refs = sorted(set(re.findall(r'img-\d+\.png', new_body)),
+                  key=lambda s: int(s[4:-4]))
+    for f in os.listdir(pdir):
+        if re.fullmatch(r'img-\d+\.png', f) and f not in refs:
+            try:
+                os.remove(os.path.join(pdir, f))
+            except Exception:
+                pass
+    out = (head + '\n\n' + new_body.strip() + '\n') if head else (new_body.strip() + '\n')
+    with open(mp, 'w', encoding='utf-8') as f:
+        f.write(out)
+    synced = sync_spec_body_images(pdir, refs)
+    cleared = False
+    ch = os.path.join(pdir, 'content.html')
+    if os.path.exists(ch):
+        try:
+            os.remove(ch)
+            cleared = True
+        except Exception:
+            pass
+    log_run('BODYIMG pkg=%s n=%d mode=%s (via editor)' % (name, n, mode))
+    return {'ok': True, 'count': n, 'mode': mode,
+            'spec_synced': synced, 'content_cleared': cleared}
+
+
+def do_regen_image(name, src, topic):
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', name or ''):
+        return {'ok': False, 'error': 'invalid name'}
+    src = os.path.basename(src or '')
+    if src == 'cover.png' or not re.fullmatch(r'[\w.\-]+\.(png|jpg|jpeg|gif|webp)', src):
+        return {'ok': False, 'error': '只能重新生成正文配图'}
+    pdir = os.path.join(data_dir(), 'jobs', name)
+    if not os.path.isfile(os.path.join(pdir, src)):
+        return {'ok': False, 'error': '图不存在'}
+    title = name
+    try:
+        meta, _b = parse_front_matter(open(os.path.join(pdir, 'article.md'), encoding='utf-8').read())
+        title = meta.get('title') or name
+    except Exception:
+        pass
+    conf = ai_conf(load_settings())
+    tpl = conf.get('body_prompt') or DEFAULT_BODY_PROMPT
+    prompt = tpl.replace('{title}', title).replace('{topic}', topic or title)
+    target = src
+    if not src.endswith('.png'):
+        import time as _t
+        target = 'regen-%d.png' % int(_t.time() * 1000)
+    mode = 'python'
+    done = False
+    try:
+        raw = ai_image_raw(conf, prompt)
+        if raw:
+            save_scaled_image(pdir, target, raw, BODY_IMG_W)
+            mode = 'ai'
+            done = True
+    except Exception as e:
+        log_run('regen-img ai failed: %s' % str(e)[:150])
+    if not done:
+        m = re.match(r'img-(\d+)\.png', src)
+        program_body_image(pdir, target, (int(m.group(1)) - 1) if m else 0)
+        mode = 'python'
+    log_run('REGENIMG pkg=%s src=%s target=%s mode=%s' % (name, src, target, mode))
+    return {'ok': True, 'mode': mode, 'src': target}
 
 
 def egress_ip():
@@ -664,7 +795,7 @@ def do_generate(topic, notes):
     pdir = os.path.join(data_dir(), 'jobs', name)
     os.makedirs(pdir)
     try:
-        md, n_img = make_body_images(pdir, md, conf, title)
+        md, n_img, _im = make_body_images(pdir, md, conf, title)
         if n_img:
             log_run('GEN body images: %d (pkg=%s)' % (n_img, name))
     except Exception as e:
@@ -885,7 +1016,7 @@ def unrewrite_html_imgs(html):
                   lambda m: urllib.parse.unquote(m.group(1)), html)
 
 
-EDIT_JS = '<script>\n(function () {\n  var PKG = __PKG_JSON__;\n  var BASE = \'/app/gzhuploader\';\n  function findActions() {\n    var btns = document.querySelectorAll(\'button, a\');\n    for (var i = 0; i < btns.length; i++) {\n      if ((btns[i].textContent || \'\').indexOf(\'保存排版\') >= 0) return btns[i];\n    }\n    return null;\n  }\n  function mount() {\n    var saveBtn = findActions();\n    var host = saveBtn && saveBtn.parentElement;\n    if (!host || document.getElementById(\'gzh-edit-btn\')) return;\n    var btn = document.createElement(\'button\');\n    btn.id = \'gzh-edit-btn\';\n    btn.textContent = \'编辑文字 / 图片\';\n    btn.className = saveBtn.className || \'\';\n    btn.style.cssText = \'background:#EEF2FF;border:1px solid #3B5BFD;color:#2F4BE0;cursor:pointer;margin-left:8px\';\n    btn.addEventListener(\'click\', openEditor);\n    host.appendChild(btn);\n  }\n  function ta(val, rows) {\n    var t = document.createElement(\'textarea\');\n    t.value = val || \'\';\n    t.rows = rows || 3;\n    t.style.cssText = \'width:100%;box-sizing:border-box;border:1px solid #E3E6EA;border-radius:8px;padding:8px;font-size:13px;line-height:1.6;margin:4px 0 10px\';\n    return t;\n  }\n  function label(txt) {\n    var d = document.createElement(\'div\');\n    d.textContent = txt;\n    d.style.cssText = \'font-size:12px;color:#8A94A6;margin-top:8px\';\n    return d;\n  }\n  function openEditor() {\n    var old = document.getElementById(\'gzh-editor\');\n    if (old) { old.remove(); return; }\n    fetch(BASE + \'/spec-get?name=\' + encodeURIComponent(PKG)).then(function (r) { return r.json(); }).then(function (res) {\n      if (!res.ok) { alert(\'读取排版规格失败\'); return; }\n      var spec = res.spec, files = res.files || [];\n      var panel = document.createElement(\'div\');\n      panel.id = \'gzh-editor\';\n      panel.style.cssText = \'position:fixed;top:0;right:0;bottom:0;width:min(430px,94vw);background:#fff;z-index:10001;box-shadow:-8px 0 28px rgba(16,24,40,.18);padding:16px;overflow-y:auto;box-sizing:border-box;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif\';\n      var h = document.createElement(\'div\');\n      h.innerHTML = \'<b style="font-size:15px">编辑文字 / 图片</b><div style="font-size:12px;color:#8A94A6;margin-top:4px">改动存入排版规格;保存后页面刷新,记得再点一次「保存排版」让文章定稿。标题与封面在「编辑」页改。</div>\';\n      panel.appendChild(h);\n      var fields = [];\n      (spec.sections || []).forEach(function (sec, si) {\n        panel.appendChild(label(\'小节 \' + (si + 1) + \' 标题\'));\n        var fH = ta(sec.heading || \'\', 2); panel.appendChild(fH);\n        fields.push({ get: function () { sec.heading = fH.value; } });\n        (sec.blocks || []).forEach(function (blk, bi) {\n          var where = \'小节 \' + (si + 1) + \' · 第 \' + (bi + 1) + \' 段\';\n          if (blk.t === \'img\') {\n            panel.appendChild(label(where + \'(图片)\'));\n            var sel = document.createElement(\'select\');\n            sel.style.cssText = \'width:100%;box-sizing:border-box;border:1px solid #E3E6EA;border-radius:8px;padding:8px;font-size:13px;margin:4px 0 6px;background:#fff\';\n            files.filter(function (f) { return /\\.(png|jpe?g|gif|webp)$/i.test(f); }).forEach(function (f) {\n              var o = document.createElement(\'option\'); o.value = f; o.textContent = f; if (f === blk.src) o.selected = true; sel.appendChild(o);\n            });\n            panel.appendChild(sel);\n            var up = document.createElement(\'input\');\n            up.type = \'file\'; up.accept = \'image/*\';\n            up.style.cssText = \'font-size:12px;margin:2px 0 6px\';\n            panel.appendChild(up);\n            var note = document.createElement(\'div\');\n            note.style.cssText = \'font-size:12px;color:#8A94A6;margin-bottom:10px\';\n            note.textContent = \'选包里现有的图,或上传一张新图(自动存进包里)。\';\n            panel.appendChild(note);\n            fields.push({ get: function () { blk.src = sel.value; }, file: up, sel: sel, blk: blk });\n            if (blk.cap !== undefined) {\n              panel.appendChild(label(\'图片说明\'));\n              var fCap = ta(blk.cap || \'\', 2); panel.appendChild(fCap);\n              fields.push({ get: function () { blk.cap = fCap.value; } });\n            }\n          } else if (blk.t === \'list\') {\n            panel.appendChild(label(where + \'(列表,一行一条)\'));\n            var fL = ta((blk.items || []).join(\'\\n\'), 4); panel.appendChild(fL);\n            fields.push({ get: function () { blk.items = fL.value.split(\'\\n\'); } });\n          } else if (blk.t === \'table\') {\n            panel.appendChild(label(where + \'(表格,首行表头,逗号分隔)\'));\n            var rows = [blk.head || []].concat(blk.rows || []).map(function (r) { return r.join(\',\'); }).join(\'\\n\');\n            var fT = ta(rows, 4); panel.appendChild(fT);\n            fields.push({ get: function () { var ls = fT.value.split(\'\\n\').filter(function (x) { return x.length; }); blk.head = ls.length ? ls[0].split(\',\') : []; blk.rows = ls.slice(1).map(function (x) { return x.split(\',\'); }); } });\n          } else {\n            panel.appendChild(label(where + (blk.t === \'quote\' ? \'(引用)\' : \'(段落)\')));\n            var fX = ta(blk.x || \'\', 4); panel.appendChild(fX);\n            fields.push({ get: function () { blk.x = fX.value; } });\n          }\n        });\n      });\n      var bar = document.createElement(\'div\');\n      bar.style.cssText = \'display:flex;gap:8px;margin-top:14px\';\n      var save = document.createElement(\'button\');\n      save.textContent = \'保存修改并刷新\';\n      save.style.cssText = \'flex:1;padding:11px;border:none;border-radius:10px;background:#3B5BFD;color:#fff;font-size:14px;cursor:pointer\';\n      var close = document.createElement(\'button\');\n      close.textContent = \'关闭\';\n      close.style.cssText = \'padding:11px 16px;border:1px solid #E3E6EA;border-radius:10px;background:#fff;font-size:14px;cursor:pointer\';\n      close.addEventListener(\'click\', function () { panel.remove(); });\n      save.addEventListener(\'click\', function () {\n        save.disabled = true; save.textContent = \'保存中…\';\n        var chain = Promise.resolve();\n        fields.forEach(function (f) {\n          f.get();\n          if (f.file && f.file.files && f.file.files[0]) {\n            var file = f.file.files[0];\n            chain = chain.then(function () {\n              return new Promise(function (resolve) {\n                var rd = new FileReader();\n                rd.onload = function () {\n                  var b64 = String(rd.result).split(\',\')[1];\n                  fetch(BASE + \'/job-file\', { method: \'POST\', headers: { \'Content-Type\': \'application/json\' }, body: JSON.stringify({ name: PKG, filename: file.name, data_base64: b64 }) }).then(function () {\n                    f.blk.src = file.name;\n                    var o = document.createElement(\'option\'); o.value = file.name; o.textContent = file.name; o.selected = true; f.sel.appendChild(o);\n                    resolve();\n                  });\n                };\n                rd.readAsDataURL(file);\n              });\n            });\n          }\n        });\n        chain.then(function () {\n          return fetch(BASE + \'/save-spec\', { method: \'POST\', headers: { \'Content-Type\': \'application/json\' }, body: JSON.stringify({ name: PKG, spec: spec }) });\n        }).then(function () { location.reload(); }).catch(function () { save.disabled = false; save.textContent = \'保存失败,重试\'; });\n      });\n      bar.appendChild(save); bar.appendChild(close);\n      panel.appendChild(bar);\n      document.body.appendChild(panel);\n    });\n  }\n  var tries = 0;\n  var iv = setInterval(function () { mount(); if (document.getElementById(\'gzh-edit-btn\') || ++tries > 40) clearInterval(iv); }, 500);\n})();\n</script>\n'
+EDIT_JS = '<script>\n(function () {\n  var PKG = __PKG_JSON__;\n  var BASE = \'/app/gzhuploader\';\n  function findActions() {\n    var btns = document.querySelectorAll(\'button, a\');\n    for (var i = 0; i < btns.length; i++) {\n      if ((btns[i].textContent || \'\').indexOf(\'保存排版\') >= 0) return btns[i];\n    }\n    return null;\n  }\n  function mount() {\n    var saveBtn = findActions();\n    var host = saveBtn && saveBtn.parentElement;\n    if (!host || document.getElementById(\'gzh-edit-btn\')) return;\n    var btn = document.createElement(\'button\');\n    btn.id = \'gzh-edit-btn\';\n    btn.textContent = \'编辑文字 / 图片\';\n    btn.className = saveBtn.className || \'\';\n    btn.style.cssText = \'background:#EEF2FF;border:1px solid #3B5BFD;color:#2F4BE0;cursor:pointer;margin-left:8px\';\n    btn.addEventListener(\'click\', openEditor);\n    host.appendChild(btn);\n  }\n  function ta(val, rows) {\n    var t = document.createElement(\'textarea\');\n    t.value = val || \'\';\n    t.rows = rows || 3;\n    t.style.cssText = \'width:100%;box-sizing:border-box;border:1px solid #E3E6EA;border-radius:8px;padding:8px;font-size:13px;line-height:1.6;margin:4px 0 10px\';\n    return t;\n  }\n  function label(txt) {\n    var d = document.createElement(\'div\');\n    d.textContent = txt;\n    d.style.cssText = \'font-size:12px;color:#8A94A6;margin-top:8px\';\n    return d;\n  }\n  function openEditor() {\n    var old = document.getElementById(\'gzh-editor\');\n    if (old) { old.remove(); return; }\n    fetch(BASE + \'/spec-get?name=\' + encodeURIComponent(PKG)).then(function (r) { return r.json(); }).then(function (res) {\n      if (!res.ok) { alert(\'读取排版规格失败\'); return; }\n      var spec = res.spec, files = res.files || [];\n      var panel = document.createElement(\'div\');\n      panel.id = \'gzh-editor\';\n      panel.style.cssText = \'position:fixed;top:0;right:0;bottom:0;width:min(430px,94vw);background:#fff;z-index:10001;box-shadow:-8px 0 28px rgba(16,24,40,.18);padding:16px;overflow-y:auto;box-sizing:border-box;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif\';\n      var h = document.createElement(\'div\');\n      h.innerHTML = \'<b style="font-size:15px">编辑文字 / 图片</b><div style="font-size:12px;color:#8A94A6;margin-top:4px">改动存入排版规格;保存后页面刷新,记得再点一次「保存排版」让文章定稿。标题与封面在「编辑」页改。</div>\';\n      panel.appendChild(h);\n      var fields = [];\n      (spec.sections || []).forEach(function (sec, si) {\n        panel.appendChild(label(\'小节 \' + (si + 1) + \' 标题\'));\n        var fH = ta(sec.heading || \'\', 2); panel.appendChild(fH);\n        fields.push({ get: function () { sec.heading = fH.value; } });\n        (sec.blocks || []).forEach(function (blk, bi) {\n          var where = \'小节 \' + (si + 1) + \' · 第 \' + (bi + 1) + \' 段\';\n          if (blk.t === \'img\') {\n            panel.appendChild(label(where + \'(图片)\'));\n            var sel = document.createElement(\'select\');\n            sel.style.cssText = \'width:100%;box-sizing:border-box;border:1px solid #E3E6EA;border-radius:8px;padding:8px;font-size:13px;margin:4px 0 6px;background:#fff\';\n            files.filter(function (f) { return /\\.(png|jpe?g|gif|webp)$/i.test(f); }).forEach(function (f) {\n              var o = document.createElement(\'option\'); o.value = f; o.textContent = f; if (f === blk.src) o.selected = true; sel.appendChild(o);\n            });\n            panel.appendChild(sel);\n            var up = document.createElement(\'input\');\n            up.type = \'file\'; up.accept = \'image/*\';\n            up.style.cssText = \'font-size:12px;margin:2px 0 6px\';\n            panel.appendChild(up);\n            var note = document.createElement(\'div\');\n            note.style.cssText = \'font-size:12px;color:#8A94A6;margin-bottom:10px\';\n            note.textContent = \'选包里现有的图,或上传一张新图(自动存进包里)。\';\n            panel.appendChild(note);\n            var regen = document.createElement(\'button\');\n            regen.textContent = \'重新生成这张图\';\n            regen.style.cssText = \'padding:7px 12px;border:1px solid #3B5BFD;border-radius:8px;background:#EEF2FF;color:#2F4BE0;font-size:13px;cursor:pointer;margin:2px 0 8px\';\n            regen.addEventListener(\'click\', function () {\n              regen.disabled = true; regen.textContent = \'生成中…\';\n              fetch(BASE + \'/regen-body-image\', { method: \'POST\', headers: { \'Content-Type\': \'application/json\' }, body: JSON.stringify({ name: PKG, src: blk.src, topic: sec.heading || \'\' }) }).then(function (r) { return r.json(); }).then(function (r) {\n                if (r.ok) {\n                  if (r.src && r.src !== blk.src) {\n                    var o = document.createElement(\'option\'); o.value = r.src; o.textContent = r.src; sel.appendChild(o);\n                    blk.src = r.src; sel.value = r.src;\n                  }\n                  alert((r.mode === \'ai\' ? \'已用 AI 出图\' : \'已用程序图\') + \'重新生成。点「保存修改并刷新」后，再点「保存排版」定稿。\');\n                } else { alert(\'生成失败：\' + (r.error || \'\')); }\n                regen.disabled = false; regen.textContent = \'重新生成这张图\';\n              }).catch(function (e) { regen.disabled = false; regen.textContent = \'重新生成这张图\'; alert(\'生成失败\' + e); });\n            });\n            panel.appendChild(regen);\n            fields.push({ get: function () { blk.src = sel.value; }, file: up, sel: sel, blk: blk });\n            if (blk.cap !== undefined) {\n              panel.appendChild(label(\'图片说明\'));\n              var fCap = ta(blk.cap || \'\', 2); panel.appendChild(fCap);\n              fields.push({ get: function () { blk.cap = fCap.value; } });\n            }\n          } else if (blk.t === \'list\') {\n            panel.appendChild(label(where + \'(列表,一行一条)\'));\n            var fL = ta((blk.items || []).join(\'\\n\'), 4); panel.appendChild(fL);\n            fields.push({ get: function () { blk.items = fL.value.split(\'\\n\'); } });\n          } else if (blk.t === \'table\') {\n            panel.appendChild(label(where + \'(表格,首行表头,逗号分隔)\'));\n            var rows = [blk.head || []].concat(blk.rows || []).map(function (r) { return r.join(\',\'); }).join(\'\\n\');\n            var fT = ta(rows, 4); panel.appendChild(fT);\n            fields.push({ get: function () { var ls = fT.value.split(\'\\n\').filter(function (x) { return x.length; }); blk.head = ls.length ? ls[0].split(\',\') : []; blk.rows = ls.slice(1).map(function (x) { return x.split(\',\'); }); } });\n          } else {\n            panel.appendChild(label(where + (blk.t === \'quote\' ? \'(引用)\' : \'(段落)\')));\n            var fX = ta(blk.x || \'\', 4); panel.appendChild(fX);\n            fields.push({ get: function () { blk.x = fX.value; } });\n          }\n        });\n      });\n      var bar = document.createElement(\'div\');\n      bar.style.cssText = \'display:flex;gap:8px;margin-top:14px\';\n      var save = document.createElement(\'button\');\n      save.textContent = \'保存修改并刷新\';\n      save.style.cssText = \'flex:1;padding:11px;border:none;border-radius:10px;background:#3B5BFD;color:#fff;font-size:14px;cursor:pointer\';\n      var close = document.createElement(\'button\');\n      close.textContent = \'关闭\';\n      close.style.cssText = \'padding:11px 16px;border:1px solid #E3E6EA;border-radius:10px;background:#fff;font-size:14px;cursor:pointer\';\n      close.addEventListener(\'click\', function () { panel.remove(); });\n      save.addEventListener(\'click\', function () {\n        save.disabled = true; save.textContent = \'保存中…\';\n        var chain = Promise.resolve();\n        fields.forEach(function (f) {\n          f.get();\n          if (f.file && f.file.files && f.file.files[0]) {\n            var file = f.file.files[0];\n            chain = chain.then(function () {\n              return new Promise(function (resolve) {\n                var rd = new FileReader();\n                rd.onload = function () {\n                  var b64 = String(rd.result).split(\',\')[1];\n                  fetch(BASE + \'/job-file\', { method: \'POST\', headers: { \'Content-Type\': \'application/json\' }, body: JSON.stringify({ name: PKG, filename: file.name, data_base64: b64 }) }).then(function () {\n                    f.blk.src = file.name;\n                    var o = document.createElement(\'option\'); o.value = file.name; o.textContent = file.name; o.selected = true; f.sel.appendChild(o);\n                    resolve();\n                  });\n                };\n                rd.readAsDataURL(file);\n              });\n            });\n          }\n        });\n        chain.then(function () {\n          return fetch(BASE + \'/save-spec\', { method: \'POST\', headers: { \'Content-Type\': \'application/json\' }, body: JSON.stringify({ name: PKG, spec: spec }) });\n        }).then(function () { location.reload(); }).catch(function () { save.disabled = false; save.textContent = \'保存失败,重试\'; });\n      });\n      bar.appendChild(save); bar.appendChild(close);\n      panel.appendChild(bar);\n      document.body.appendChild(panel);\n    });\n  }\n  var tries = 0;\n  var iv = setInterval(function () { mount(); if (document.getElementById(\'gzh-edit-btn\') || ++tries > 40) clearInterval(iv); }, 500);\n})();\n</script>\n'
 
 
 def typeset_page(name):
@@ -1354,6 +1485,10 @@ class Handler(BaseHTTPRequestHandler):
                     pass
                 mode = make_cover(pdir, title)
                 return self._json({'ok': True, 'mode': mode})
+            if path == '/body-images':
+                return self._json(do_body_images(data.get('name', '')))
+            if path == '/regen-body-image':
+                return self._json(do_regen_image(data.get('name', ''), data.get('src', ''), (data.get('topic') or '').strip()))
             if path == '/upload':
                 name = data.get('name', '')
                 if not re.fullmatch(r'[A-Za-z0-9._-]+', name or ''):

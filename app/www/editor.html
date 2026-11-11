@@ -82,6 +82,14 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>正文配图</h2>
+    <div class="mut" id="bodyimg-state">按正文小节自动生成 2–3 张配图并插入对应位置；已有配图会重新生成替换，不会越点越多。逐张换图在排版页的「编辑文字 / 图片」里。</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button id="btn-bodyimg">生成正文配图</button>
+    </div>
+  </div>
+
   <div class="card" id="content-note" style="display:none">
     <h2>排版稿</h2>
     <div class="warn">这个包有排版稿（content.html），上传时以排版稿为准，正文改动请在排版页用「编辑文字 / 图片」完成；若删掉排版稿，上传将改用原始 Markdown 正文，排版页的修改不再生效。</div>
@@ -121,6 +129,17 @@ $('btn-save').onclick = async () => {
   $('btn-save').disabled = false;
 };
 $('btn-preview').onclick = () => { window.open(BASE + '/preview?name=' + encodeURIComponent(name), '_blank'); };
+$('btn-bodyimg').onclick = async () => {
+  $('btn-bodyimg').disabled = true; msg('正在生成正文配图（约半分钟）…');
+  const r = await (await fetch(BASE + '/body-images', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})})).json();
+  if (r.ok) {
+    const how = r.mode === 'ai' ? 'AI 出图' : (r.mode === 'mixed' ? 'AI + 程序图' : '程序绘制兜底');
+    msg('已生成 ' + r.count + ' 张正文配图（' + how + '）' + (r.content_cleared ? '；旧排版稿已清除，请重新排版' : ''), true);
+    $('bodyimg-state').textContent = '已生成 ' + r.count + ' 张正文配图（' + how + '）。逐张换图去排版页的「编辑文字 / 图片」。';
+    load();
+  } else msg('生成失败：' + (r.error || ''), false);
+  $('btn-bodyimg').disabled = false;
+};
 $('btn-content').onclick = async () => {
   if (!confirm('删除排版稿？之后上传将用 Markdown 正文。')) return;
   const r = await (await fetch(BASE + '/drop-content', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})})).json();
